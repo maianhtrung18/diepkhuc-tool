@@ -101,7 +101,7 @@
     }
 
     /* Chỗ để sau này nhét các nút */
-   #my-dkhd-toolbox .toolbox-content {
+    #my-dkhd-toolbox .toolbox-content {
     height: auto;
     min-height: 100px;
     padding: 8px;
@@ -118,31 +118,31 @@
     font-size: 16px;
     }
 
-#my-dkhd-toolbox .toolbox-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-}
-
-#my-dkhd-toolbox .toolbox-row label {
-    flex: 1;
-    color: white;
-}
-
-.toolbox-row .btn {
-    font-size: 16px !important;
-    padding: 4px 7px !important;
-}
-
-#my-dkhd-toolbox .toolbox-row button {
-    flex: 0 0 auto;
-}
-
-#my-dkhd-toolbox .toolbox-row input[type="number"] {
-    width: 55px !important;
-    margin-left: auto;
-}
+    #my-dkhd-toolbox .toolbox-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+    }
+    
+    #my-dkhd-toolbox .toolbox-row label {
+        flex: 1;
+        color: white;
+    }
+    
+    .toolbox-row .btn {
+        font-size: 16px !important;
+        padding: 4px 7px !important;
+    }
+    
+    #my-dkhd-toolbox .toolbox-row button {
+        flex: 0 0 auto;
+    }
+    
+    #my-dkhd-toolbox .toolbox-row input[type="number"] {
+        width: 55px !important;
+        margin-left: auto;
+    }
 
     /* Nút kéo ra / thu vào */
     #my-dkhd-toolbox .toolbox-toggle {
