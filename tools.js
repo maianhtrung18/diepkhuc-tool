@@ -181,19 +181,19 @@
     toolbox.className = '';
 
     toolbox.innerHTML = `
-    <div class="toolbox-body">
-
-        <div class="toolbox-drag"></div>
-
-        <div class="toolbox-content" id="toolbox-content">
+        <div class="toolbox-body">
+    
+            <div class="toolbox-drag"></div>
+    
+            <div class="toolbox-content" id="toolbox-content">
+            </div>
+    
         </div>
-
-    </div>
-
-    <button class="toolbox-toggle" type="button">
-        ‹
-    </button>
-`;
+    
+        <button class="toolbox-toggle" type="button">
+            ‹
+        </button>
+    `;
 
 
     // Chờ body rồi mới đưa toolbox vào
@@ -414,11 +414,11 @@
     return [...document.querySelectorAll(".user-list .item")];
     }
 
-   function getMicUsers() {
-
+    function getMicUsers() {
+    
        return getRoomItems().filter(item => item.querySelector(".info")?.innerText.trim() === "🎤")
                 .map(item => item.querySelector(".nick").innerText.trim());
-   }
+    }
 
     function getQueueUsers() {
 
@@ -1044,7 +1044,6 @@
         autoCommentBtn.type = "button";
         autoCommentBtn.className = "btn btn-warning";
         autoCommentBtn.innerText = "Auto Cmt OFF";
-     //   autoCommentBtn.style.marginLeft = "5px";
 
         autoCommentBtn.onclick = () => {
             autoCommentRunning = !autoCommentRunning;
