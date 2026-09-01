@@ -46,17 +46,18 @@
 
 
      // Audio control
+    let audioControlEnabled = false;
+
     const originalPlay = HTMLMediaElement.prototype.play;
 
     HTMLMediaElement.prototype.play = function () {
         const src = this.src || "";
 
-        if (src.includes("countdownbeep.mp3")) {
-            this.volume = 0.01;
-        }
-
-        if (src.includes("next-in-line-chime.mp3")) {
-            this.volume = 0.01;
+        if (
+            src.includes("countdownbeep.mp3") ||
+            src.includes("next-in-line-chime.mp3")
+        ) {
+            this.volume = audioControlEnabled ? 0.5 : 0;
         }
 
         return originalPlay.apply(this, arguments);
@@ -79,86 +80,86 @@
             transition: transform 0.25s ease;
             user-select: none;
         }
-    
+
         /* Thu toolbox vào cạnh phải */
         #my-dkhd-toolbox.collapsed {
             transform: translateX(calc(-100% + 36px));
         }
-    
+
         /* Phần thân toolbox */
         #my-dkhd-toolbox .toolbox-body {
             width: 220px;
             min-height: 120px;
             padding: 10px;
             box-sizing: border-box;
-    
+
             background: rgba(30, 30, 30, 0.96);
             border: 1px solid rgba(255,255,255,0.15);
             border-right: none;
             border-radius: 10px 0 0 10px;
-    
+
             color: white;
         }
-    
+
         /* Chỗ để sau này nhét các nút */
         #my-dkhd-toolbox .toolbox-content {
         height: auto;
         min-height: 100px;
         padding: 8px;
-    
+
         display: flex;
         flex-direction: column;
         justify-content: flex-start;
         gap: 6px;
-    
+
         border: 1px dashed rgba(255,255,255,0.25);
         border-radius: 6px;
-    
+
         color: rgba(255,255,255,0.4);
         font-size: 16px;
         }
-    
+
         #my-dkhd-toolbox .toolbox-row {
             display: flex;
             align-items: center;
             gap: 6px;
             width: 100%;
         }
-        
+
         #my-dkhd-toolbox .toolbox-row label {
             flex: 1;
             color: white;
         }
-        
+
         .toolbox-row .btn {
             font-size: 16px !important;
             padding: 4px 7px !important;
         }
-        
+
         #my-dkhd-toolbox .toolbox-row button {
             flex: 0 0 auto;
         }
-        
+
         #my-dkhd-toolbox .toolbox-row input[type="number"] {
             width: 55px !important;
             margin-left: auto;
         }
-    
+
         /* Nút kéo ra / thu vào */
         #my-dkhd-toolbox .toolbox-toggle {
             width: 36px;
             min-width: 36px;
-    
+
             border: none;
             border-radius: 0 8px 8px 0;
-    
+
             background: #222;
             color: white;
-    
+
             cursor: pointer;
             font-size: 20px;
         }
-    
+
         /* Thanh để kéo toolbox */
         #my-dkhd-toolbox .toolbox-drag {
             position: absolute;
@@ -166,10 +167,44 @@
             right: 36px;
             top: 0;
             height: 20px;
-    
+
             cursor: move;
         }
+        .audio-switch {
+            position: relative;
+            width: 38px;
+            height: 20px;
+            padding: 0;
+            margin-left: auto;
+            border: none;
+            border-radius: 20px;
+            background: #555;
+            cursor: pointer;
+            flex: 0 0 38px;
+        }
+        
+        .audio-switch::before {
+            content: "";
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            left: 2px;
+            top: 2px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        
+        .audio-switch.on {
+            background: #198754;
+        }
+        
+        .audio-switch.on::before {
+            transform: translateX(18px);
+        }
     `;
+
+
 
     document.documentElement.appendChild(toolboxStyle);
 
@@ -182,14 +217,14 @@
 
     toolbox.innerHTML = `
         <div class="toolbox-body">
-    
+
             <div class="toolbox-drag"></div>
-    
+
             <div class="toolbox-content" id="toolbox-content">
             </div>
-    
+
         </div>
-    
+
         <button class="toolbox-toggle" type="button">
             ‹
         </button>
@@ -415,7 +450,7 @@
     }
 
     function getMicUsers() {
-    
+
        return getRoomItems().filter(item => item.querySelector(".info")?.innerText.trim() === "🎤")
                 .map(item => item.querySelector(".nick").innerText.trim());
     }
@@ -915,7 +950,7 @@
             const micUsers = getMicUsers();
             const queueUsers = getQueueUsers();
 
-          
+
 
             const users = [...new Set([...micUsers, ...queueUsers, ...chatUsers])]
                 .filter(name => name && name !== myNick);
@@ -1133,6 +1168,44 @@
 
 
         toolboxContent.appendChild(row3);
+
+       const audioRow = document.createElement("div");
+        audioRow.className = "toolbox-row";
+
+        const audioText = document.createElement("label");
+        audioText.innerText = "Audio alert";
+        audioText.style.color = "white";
+
+        const audioSwitch = document.createElement("button");
+        audioSwitch.type = "button";
+        audioSwitch.className = "audio-switch";
+
+        audioSwitch.classList.toggle("on", audioControlEnabled);
+
+        audioSwitch.onclick = () => {
+            audioControlEnabled = !audioControlEnabled;
+
+            audioSwitch.classList.toggle("on", audioControlEnabled);
+
+            document.querySelectorAll("audio, video").forEach(el => {
+                const src = el.src || "";
+
+                if (
+                    src.includes("countdownbeep.mp3") ||
+                    src.includes("next-in-line-chime.mp3")
+                ) {
+                    el.volume = audioControlEnabled ? 0.5 : 0;
+                }
+            });
+
+            log(`Audio Control ${audioControlEnabled ? "ON" : "OFF"}`);
+        };
+
+        audioRow.appendChild(audioText);
+        audioRow.appendChild(audioSwitch);
+
+        toolboxContent.appendChild(audioRow);
+
 
         const toolbar = document.createElement("div");
         toolbar.id = "mic-queue-pro-toolbar";
