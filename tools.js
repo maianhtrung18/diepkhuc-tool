@@ -69,107 +69,107 @@
     const toolboxStyle = document.createElement('style');
 
     toolboxStyle.textContent = `
-    #my-dkhd-toolbox {
-        position: fixed;
-        top: 400px;
-        left: 0;
-        z-index: 999999999;
+        #my-dkhd-toolbox {
+            position: fixed;
+            top: 400px;
+            left: 0;
+            z-index: 999999999;
+            display: flex;
+            align-items: stretch;
+            transition: transform 0.25s ease;
+            user-select: none;
+        }
+    
+        /* Thu toolbox vào cạnh phải */
+        #my-dkhd-toolbox.collapsed {
+            transform: translateX(calc(-100% + 36px));
+        }
+    
+        /* Phần thân toolbox */
+        #my-dkhd-toolbox .toolbox-body {
+            width: 220px;
+            min-height: 120px;
+            padding: 10px;
+            box-sizing: border-box;
+    
+            background: rgba(30, 30, 30, 0.96);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-right: none;
+            border-radius: 10px 0 0 10px;
+    
+            color: white;
+        }
+    
+        /* Chỗ để sau này nhét các nút */
+        #my-dkhd-toolbox .toolbox-content {
+        height: auto;
+        min-height: 100px;
+        padding: 8px;
+    
         display: flex;
-        align-items: stretch;
-        transition: transform 0.25s ease;
-        user-select: none;
-    }
-
-    /* Thu toolbox vào cạnh phải */
-    #my-dkhd-toolbox.collapsed {
-        transform: translateX(calc(-100% + 36px));
-    }
-
-    /* Phần thân toolbox */
-    #my-dkhd-toolbox .toolbox-body {
-        width: 220px;
-        min-height: 120px;
-        padding: 10px;
-        box-sizing: border-box;
-
-        background: rgba(30, 30, 30, 0.96);
-        border: 1px solid rgba(255,255,255,0.15);
-        border-right: none;
-        border-radius: 10px 0 0 10px;
-
-        color: white;
-    }
-
-    /* Chỗ để sau này nhét các nút */
-    #my-dkhd-toolbox .toolbox-content {
-    height: auto;
-    min-height: 100px;
-    padding: 8px;
-
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 6px;
-
-    border: 1px dashed rgba(255,255,255,0.25);
-    border-radius: 6px;
-
-    color: rgba(255,255,255,0.4);
-    font-size: 16px;
-    }
-
-    #my-dkhd-toolbox .toolbox-row {
-        display: flex;
-        align-items: center;
+        flex-direction: column;
+        justify-content: flex-start;
         gap: 6px;
-        width: 100%;
-    }
     
-    #my-dkhd-toolbox .toolbox-row label {
-        flex: 1;
-        color: white;
-    }
+        border: 1px dashed rgba(255,255,255,0.25);
+        border-radius: 6px;
     
-    .toolbox-row .btn {
-        font-size: 16px !important;
-        padding: 4px 7px !important;
-    }
+        color: rgba(255,255,255,0.4);
+        font-size: 16px;
+        }
     
-    #my-dkhd-toolbox .toolbox-row button {
-        flex: 0 0 auto;
-    }
+        #my-dkhd-toolbox .toolbox-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            width: 100%;
+        }
+        
+        #my-dkhd-toolbox .toolbox-row label {
+            flex: 1;
+            color: white;
+        }
+        
+        .toolbox-row .btn {
+            font-size: 16px !important;
+            padding: 4px 7px !important;
+        }
+        
+        #my-dkhd-toolbox .toolbox-row button {
+            flex: 0 0 auto;
+        }
+        
+        #my-dkhd-toolbox .toolbox-row input[type="number"] {
+            width: 55px !important;
+            margin-left: auto;
+        }
     
-    #my-dkhd-toolbox .toolbox-row input[type="number"] {
-        width: 55px !important;
-        margin-left: auto;
-    }
-
-    /* Nút kéo ra / thu vào */
-    #my-dkhd-toolbox .toolbox-toggle {
-        width: 36px;
-        min-width: 36px;
-
-        border: none;
-        border-radius: 0 8px 8px 0;
-
-        background: #222;
-        color: white;
-
-        cursor: pointer;
-        font-size: 20px;
-    }
-
-    /* Thanh để kéo toolbox */
-    #my-dkhd-toolbox .toolbox-drag {
-        position: absolute;
-        left: 0;
-        right: 36px;
-        top: 0;
-        height: 20px;
-
-        cursor: move;
-    }
-`;
+        /* Nút kéo ra / thu vào */
+        #my-dkhd-toolbox .toolbox-toggle {
+            width: 36px;
+            min-width: 36px;
+    
+            border: none;
+            border-radius: 0 8px 8px 0;
+    
+            background: #222;
+            color: white;
+    
+            cursor: pointer;
+            font-size: 20px;
+        }
+    
+        /* Thanh để kéo toolbox */
+        #my-dkhd-toolbox .toolbox-drag {
+            position: absolute;
+            left: 0;
+            right: 36px;
+            top: 0;
+            height: 20px;
+    
+            cursor: move;
+        }
+    `;
 
     document.documentElement.appendChild(toolboxStyle);
 
