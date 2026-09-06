@@ -182,7 +182,7 @@
             cursor: pointer;
             flex: 0 0 38px;
         }
-        
+
         .audio-switch::before {
             content: "";
             position: absolute;
@@ -194,11 +194,11 @@
             border-radius: 50%;
             transition: transform 0.2s;
         }
-        
+
         .audio-switch.on {
             background: #198754;
         }
-        
+
         .audio-switch.on::before {
             transform: translateX(18px);
         }
@@ -866,23 +866,17 @@
 
     async function createUI() {
         if (document.getElementById("mic-queue-pro-toolbar")) return;
-
-
         const target = await waitForElement('div[data-class="DynamicButton"]');
 
         // RECORD BUTTON
         const liveListener = document.querySelector('div[data-class="LiveListener"]');
 
         if (liveListener && !document.getElementById("dk-record-button")) {
-
             recordButton = document.createElement("button");
-
             recordButton.id = "dk-record-button";
             recordButton.type = "button";
             recordButton.innerText = "🔴 Record";
-
             recordButton.className = "btn btn-danger";
-
             recordButton.style.display = "block";
             recordButton.style.width = "100%";
 
