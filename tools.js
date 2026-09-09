@@ -403,29 +403,16 @@
         return shuffled.slice(0, count).join("");
     }
 
-    async function fastSend(message, restore = true) {
-        const textarea = chatTextarea;
-        const form = chatForm;
-        const sendBtn = sendButton;
+    async function fastSend(message) {
+        if (!message) return false;
 
-        if (!textarea || !sendBtn) return false;
-
-        const oldValue = textarea.value;
-        textarea.value = message;
-        textarea.dispatchEvent(new Event("input", { bubbles: true }));
-
-        if (form) {
-            form.requestSubmit();
-        } else {
-            sendBtn.click();
+        try {
+            await window.sendChat(message);
+            return true;
+        } catch (err) {
+            console.error("[BOT] Send chat error:", err);
+            return false;
         }
-
-        if (restore) {
-            textarea.value = oldValue;
-            textarea.dispatchEvent(new Event("input", { bubbles: true }));
-        }
-
-        return true;
     }
 
     async function waitForElement(selector, timeout = 5000) {
