@@ -37,12 +37,15 @@
     let chatTextarea = null;
     let chatForm = null;
     let sendButton = null;
+    let dkManualChatSending = false;
+    let rainbowChatEnabled = false;
 
     let mediaRecorder = null;
     let recordedChunks = [];
     let recordButton = null;
     let recordingNick = "";
     let recordingStartTime = null;
+
 
 
      // Audio control
@@ -401,6 +404,42 @@
 
         const count = 1 + Math.floor(Math.random() * Math.min(8, shuffled.length));
         return shuffled.slice(0, count).join("");
+    }
+
+
+    //////////////////////////////////////////////////////
+    // 🌈 RAINBOW COLORS
+    //////////////////////////////////////////////////////
+
+    const RAINBOW_COLORS = [
+        "f00", "f30", "f60", "f90",
+        "fc0", "ff0", "ff0", "ef0",
+        "cf0", "af0", "8f0", "6f0",
+        "4f0", "2f0", "0f0", "0fc",
+        "0ff", "0cf", "09f", "06f",
+        "03f", "00f", "30f", "60f",
+        "90f", "c0f", "f0f", "f0c",
+        "f09", "f06", "f03", "f00"
+    ];
+
+    function rainbowEncodeUserChat(text) {
+        // Xóa color code cũ nếu có
+        text = text.replace(/\[[0-9a-fA-F]{3}\]/g, "");
+
+        // Random vị trí bắt đầu
+        const start = Math.floor(Math.random() * RAINBOW_COLORS.length);
+
+        let result = "";
+
+        for (let i = 0; i < text.length; i++) {
+            const color = RAINBOW_COLORS[
+                (start + i) % RAINBOW_COLORS.length
+            ];
+
+            result += `[${color}]${text[i]}`;
+        }
+
+        return result;
     }
 
     async function fastSend(message) {
@@ -895,6 +934,48 @@
         sendButton = chatForm.querySelector('button[type="submit"]');
         chatTextarea = document.querySelector('textarea[name="message"]');
 
+
+        chatForm.addEventListener("submit", () => {
+            dkManualChatSending = true;
+
+            console.log("🌈 MANUAL SUBMIT");
+
+            setTimeout(() => {
+                dkManualChatSending = false;
+            }, 100);
+        }, true);
+
+        chatTextarea.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                dkManualChatSending = true;
+
+                console.log("🌈 MANUAL ENTER");
+
+                setTimeout(() => {
+                    dkManualChatSending = false;
+                }, 100);
+            }
+        }, true);
+
+        const originalSendChat = window.sendChat;
+
+        window.sendChat = function(message) {
+            if (dkManualChatSending && rainbowChatEnabled) {
+                const rainbowMessage = rainbowEncodeUserChat(message);
+
+                console.log(
+                    "🌈 RAINBOW SEND:",
+                    message,
+                    "→",
+                    rainbowMessage
+                );
+
+                return originalSendChat.call(this, rainbowMessage);
+            }
+
+            return originalSendChat.call(this, message);
+        };
+
         const botBtn = document.createElement("button");
         botBtn.type = "button";
         botBtn.className = "ms-1 btn btn-outline-secondary";
@@ -1127,6 +1208,36 @@
 
             toolboxContent.appendChild(row1);
             toolboxContent.appendChild(row2);
+
+            const rainbowRow = document.createElement("div");
+            rainbowRow.className = "toolbox-row";
+
+            const rainbowLabel = document.createElement("label");
+            rainbowLabel.innerText = "Rainbow Chat";
+            rainbowLabel.style.color = "white";
+
+            const rainbowBtn = document.createElement("button");
+            rainbowBtn.type = "button";
+            rainbowBtn.className = "btn btn-outline-warning";
+            rainbowBtn.innerText = "🌈 OFF";
+
+            rainbowBtn.onclick = () => {
+                rainbowChatEnabled = !rainbowChatEnabled;
+
+                rainbowBtn.innerText = rainbowChatEnabled
+                    ? "🌈 ON"
+                : "🌈 OFF";
+
+                console.log(
+                    "🌈 Rainbow:",
+                    rainbowChatEnabled ? "ON" : "OFF"
+                );
+            };
+
+            rainbowRow.appendChild(rainbowLabel);
+            rainbowRow.appendChild(rainbowBtn);
+
+            toolboxContent.appendChild(rainbowRow);
         }
 
         const autoYieldCheckbox = document.createElement("input");
