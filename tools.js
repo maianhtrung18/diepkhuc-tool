@@ -55,7 +55,12 @@
 
         if (
             src.includes("countdownbeep.mp3") ||
-            src.includes("next-in-line-chime.mp3")
+            src.includes("next-in-line-chime.mp3") ||
+            src.includes("squeal3.mp3") ||
+            src.includes("snort.mp3") ||
+            src.includes("cardslap.mp3") ||
+            src.includes("caro-1.mp3") ||
+            src.includes("caro-2.mp3")
         ) {
             this.volume = audioControlEnabled ? 0.5 : 0;
         }
