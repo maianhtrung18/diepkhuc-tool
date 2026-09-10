@@ -717,6 +717,8 @@
 
         const MAX_LENGTH = 155;
         const prefix = (chatTextarea?.value || "").trim() || "hi";
+        chatTextarea.value = "";
+        chatTextarea.dispatchEvent(new Event("input", { bubbles: true }));
 
         const messages = [];
         let current = "";
@@ -744,7 +746,13 @@
         if (current) messages.push(current);
 
         for (const message of messages) {
-            const ok = await fastSend(message, false);
+            const colorInput = document.querySelector('input[type="color"]');
+            const color = colorInput?.value?.replace("#", "");
+
+            const coloredMessage = color
+            ? `[${color[0]}${color[2]}${color[4]}]${message}`
+            : message;
+            const ok = await fastSend(coloredMessage, false);
             if (!ok) break;
             await sleep(5000);
         }
@@ -956,6 +964,15 @@
                 }, 100);
             }
         }, true);
+
+        chatTextarea.addEventListener("input", () => {
+            if (!rainbowChatEnabled) return;
+
+            if (chatTextarea.value.length > 26) {
+                chatTextarea.value = chatTextarea.value.slice(0, 26);
+                chatTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+        });
 
         const originalSendChat = window.sendChat;
 
@@ -1223,6 +1240,10 @@
 
             rainbowBtn.onclick = () => {
                 rainbowChatEnabled = !rainbowChatEnabled;
+                if (rainbowChatEnabled && chatTextarea.value.length > 26) {
+                    chatTextarea.value = chatTextarea.value.slice(0, 26);
+                    chatTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+                }
 
                 rainbowBtn.innerText = rainbowChatEnabled
                     ? "🌈 ON"
