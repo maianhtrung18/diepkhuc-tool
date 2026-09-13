@@ -1,4 +1,3 @@
-
 // ==UserScript==
 // @name         Diep Khuc - Persistent User Labels
 // @namespace    diep-khuk-user-labels
