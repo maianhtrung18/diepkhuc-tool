@@ -27,7 +27,6 @@
     let commentTimeout = null;
     let commentResolve = null;
 
-    let firstAutoComment = true;
     const YIELD_WAIT_MS = 30000;
 
     let autoYieldMic = false;
@@ -525,7 +524,7 @@
 
                 const randomMessage = getRandomMessage(autoCommentMessage);
 
-                await fastSend(randomMessage, true);
+                await fastSend(randomMessage);
                 log(`Auto Comment: ${randomMessage}`);
 
                 const seconds = parseInt(commentDelayInput?.value, 10) || 90;
@@ -752,7 +751,7 @@
             const coloredMessage = color
             ? `[${color[0]}${color[2]}${color[4]}]${message}`
             : message;
-            const ok = await fastSend(coloredMessage, false);
+            const ok = await fastSend(coloredMessage);
             if (!ok) break;
             await sleep(5000);
         }
@@ -1168,7 +1167,6 @@
             autoCommentRunning = !autoCommentRunning;
 
             if (autoCommentRunning) {
-                firstAutoComment = true;
                 autoCommentMessage = chatTextarea?.value.trim() || "";
 
                 if (!autoCommentMessage) {
