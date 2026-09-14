@@ -11,7 +11,7 @@
 
 (function () {
     "use strict";
-        // =========================================================
+    // =========================================================
     // SUPABASE CONNECTION
     // =========================================================
 
@@ -19,6 +19,11 @@
     const SUPABASE_KEY = "sb_publishable_lIhggWrSkFhe3BLeJmDpvw_oLfmd2bV";
 
     let supabase = null;
+    let currentWorkspaceId = null;
+    let currentUserOpenId = null;
+    const pendingRecords = {};
+    const activeUsers = {};
+    const updateTimers = {};
 
     function loadSupabase() {
         return new Promise((resolve, reject) => {
@@ -124,6 +129,7 @@
         }
 
         const openId = getOpenId(userInfo);
+        currentUserOpenId = openId;
 
         if (!openId) {
             console.error("[DK] Cannot get current user openId");
@@ -186,9 +192,13 @@
 
         // 4. Already has workspace → do nothing
         if (workspaces && workspaces.length > 0) {
+            currentWorkspaceId = workspaces[0].id;
+
             console.log(
-                "[DK] User already has workspace. Nothing to do."
+                "[DK] Using workspace:",
+                currentWorkspaceId
             );
+
             return;
         }
 
@@ -219,6 +229,13 @@
         console.log(
             "[DK] Workspace created:",
             newWorkspace
+        );
+
+        currentWorkspaceId = newWorkspace.id;
+
+        console.log(
+            "[DK] Using workspace:",
+            currentWorkspaceId
         );
     }
 
@@ -364,42 +381,106 @@
     //
     // =========================================================
 
-    function ensureRecord(userInfo) {
+    async function ensureRecord(userInfo) {
         const openId = getOpenId(userInfo);
 
-        if (!openId) {
+        if (!openId || !currentWorkspaceId || !supabase) {
             return null;
         }
 
-        // OpenId đã tồn tại
-        // → lấy record cũ, tuyệt đối không sửa
-        if (
-            Object.prototype.hasOwnProperty.call(
-                records,
-                openId
-            )
-        ) {
-            return records[openId];
+        const requestKey =
+              `${currentWorkspaceId}:${openId}`;
+
+        // Đang check user này → dùng chung Promise
+        if (pendingRecords[requestKey]) {
+            return await pendingRecords[requestKey];
         }
 
-        // OpenId mới
-        const currentNick = userInfo.nick || "";
+        pendingRecords[requestKey] = (async () => {
 
-        const record = {
-            nick: currentNick,
-            label: currentNick,
-            updated: false
-        };
+            // 1. Check Supabase
+            const { data, error } = await supabase
+            .from("user_labels")
+            .select("label")
+            .eq("workspace_id", currentWorkspaceId)
+            .eq("target_open_id", openId)
+            .maybeSingle();
 
-        records[openId] = record;
+            if (error) {
+                console.error(
+                    `[DK Label] Failed to check ${openId}:`,
+                    error
+                );
 
-        saveRecords();
+                return null;
+            }
 
-        console.log(
-            `[DK Label] New user saved: ${openId} → ${currentNick}`
-        );
+            // 2. Supabase đã có label
+            if (data) {
+                const record = {
+                    nick: userInfo.nick || "",
+                    label: data.label || "",
+                    updated: true
+                };
 
-        return record;
+                records[openId] = record;
+                saveRecords();
+
+                console.log(
+                    `[DK Label] Loaded from Supabase: ${openId} → ${record.label}`
+                );
+
+                return record;
+            }
+
+            // 3. Supabase chưa có
+            // Có local → dùng local
+            // Không có local → dùng nickname
+            const oldRecord = records[openId];
+            const currentNick = userInfo.nick || "";
+
+            const record = oldRecord || {
+                nick: currentNick,
+                label: currentNick,
+                updated: false
+            };
+
+            records[openId] = record;
+            saveRecords();
+
+            // 4. Tạo record trên Supabase
+            const { error: insertError } = await supabase
+            .from("user_labels")
+            .insert({
+                workspace_id: currentWorkspaceId,
+                target_open_id: openId,
+                label: record.label,
+                created_by: currentUserOpenId,
+                updated_by: currentUserOpenId
+            });
+
+            if (insertError) {
+                console.error(
+                    `[DK Label] Failed to create ${openId}:`,
+                    insertError
+                );
+
+                return record;
+            }
+
+            console.log(
+                `[DK Label] New user synced: ${openId} → ${record.label}`
+            );
+
+            return record;
+
+        })();
+
+        try {
+            return await pendingRecords[requestKey];
+        } finally {
+            delete pendingRecords[requestKey];
+        }
     }
 
     // =========================================================
@@ -427,6 +508,11 @@
         }
 
         const openId = getOpenId(userInfo);
+        console.log(
+            "[DK Label] Processing:",
+            openId,
+            userInfo.nick
+        );
 
         if (!openId) {
             return;
@@ -483,14 +569,51 @@
                 return;
             }
 
+            // Local cập nhật ngay từng ký tự
             currentRecord.label = input.value;
             currentRecord.updated = true;
 
             saveRecords();
             applyAll();
+
             console.log(
-                `[DK Label] Saved: ${openId} → ${currentRecord.label}`
+                `[DK Label] Saved local: ${openId} → ${currentRecord.label}`
             );
+
+            // -----------------------------------------------------
+            // Supabase: debounce 500ms
+            // -----------------------------------------------------
+
+            clearTimeout(currentRecord.updateTimer);
+
+            currentRecord.updateTimer = setTimeout(async function () {
+                if (!supabase || !currentWorkspaceId || !currentUserOpenId) {
+                    return;
+                }
+
+                const labelToSave = currentRecord.label;
+
+                const { error } = await supabase
+                .from("user_labels")
+                .update({
+                    label: labelToSave,
+                    updated_by: currentUserOpenId,
+                    updated_at: new Date().toISOString()
+                })
+                .eq("workspace_id", currentWorkspaceId)
+                .eq("target_open_id", openId);
+
+                if (error) {
+                    console.error(
+                        `[DK Label] Failed to update ${openId}:`,
+                        error
+                    );
+                } else {
+                    console.log(
+                        `[DK Label] Updated Supabase: ${openId} → ${labelToSave}`
+                    );
+                }
+            }, 500);
         });
 
         // -----------------------------------------------------
@@ -546,18 +669,18 @@
         }
 
         const wrap =
-            item.querySelector(
-                ".dk-user-label-wrap"
-            );
+              item.querySelector(
+                  ".dk-user-label-wrap"
+              );
 
         if (!wrap) {
             return;
         }
 
         const input =
-            wrap.querySelector(
-                ".dk-user-label-input"
-            );
+              wrap.querySelector(
+                  ".dk-user-label-input"
+              );
 
         if (!input) {
             return;
@@ -580,7 +703,7 @@
     // PROCESS ITEM
     // =========================================================
 
-    function processItem(item) {
+    async function processItem(item) {
         if (!item) {
             return;
         }
@@ -590,26 +713,43 @@
         }
 
         const userInfo =
-            getUserInfoFromElement(item);
+              getUserInfoFromElement(item);
 
         if (!userInfo) {
             return;
         }
 
         const openId =
-            getOpenId(userInfo);
+              getOpenId(userInfo);
 
         if (!openId) {
             return;
         }
 
-        const record =
-            ensureRecord(userInfo);
+        const userKey =
+              `${currentWorkspaceId}:${openId}`;
 
+        // =====================================================
+        // 1. LOCAL FIRST
+        // =====================================================
+
+        let record = records[openId];
+
+        // Chưa có local → dùng nickname làm label tạm
         if (!record) {
-            return;
+            const currentNick = userInfo.nick || "";
+
+            record = {
+                nick: currentNick,
+                label: currentNick,
+                updated: false
+            };
+
+            records[openId] = record;
+            saveRecords();
         }
 
+        // Gắn label từ LOCAL ngay lập tức
         createUI(
             item,
             userInfo,
@@ -620,44 +760,104 @@
             item,
             record
         );
+
+        // =====================================================
+        // 2. USER ĐANG ACTIVE → KHÔNG SYNC LẠI
+        // =====================================================
+
+        if (activeUsers[userKey]) {
+            return;
+        }
+
+        activeUsers[userKey] = true;
+
+        // =====================================================
+        // 3. SUPABASE SYNC BACKGROUND
+        // =====================================================
+
+        ensureRecord(userInfo)
+            .then((syncedRecord) => {
+            if (!syncedRecord) {
+                return;
+            }
+
+            // DB có kết quả mới → cập nhật UI
+            updateExistingUI(
+                item,
+                syncedRecord
+            );
+        })
+            .catch((err) => {
+            console.error(
+                `[DK Label] Background sync failed: ${openId}`,
+                err
+            );
+        });
     }
 
     // =========================================================
     // APPLY ALL
     // =========================================================
 
-    function applyAll() {
+    async function applyAll() {
         const items =
-            document.querySelectorAll(
-                ".user-list .item"
-            );
+              document.querySelectorAll(
+                  ".user-list .item"
+              );
 
         let applied = 0;
 
-        items.forEach(item => {
-            const existed =
-                !!item.querySelector(
-                    ".dk-user-label-wrap"
-                );
+        const currentUsers = {};
 
-            processItem(item);
+        for (const item of items) {
+            const userInfo =
+                  getUserInfoFromElement(item);
+
+            if (!userInfo) {
+                continue;
+            }
+
+            const openId =
+                  getOpenId(userInfo);
+
+            if (!openId) {
+                continue;
+            }
+
+            const userKey =
+                  `${currentWorkspaceId}:${openId}`;
+
+            currentUsers[userKey] = true;
+
+            const existed =
+                  !!item.querySelector(
+                      ".dk-user-label-wrap"
+                  );
+
+            await processItem(item);
 
             const existsNow =
-                !!item.querySelector(
-                    ".dk-user-label-wrap"
-                );
+                  !!item.querySelector(
+                      ".dk-user-label-wrap"
+                  );
 
             if (!existed && existsNow) {
                 applied++;
             }
-        });
+        }
+
+        // User không còn trong room → reset trạng thái
+        for (const key of Object.keys(activeUsers)) {
+            if (!currentUsers[key]) {
+                delete activeUsers[key];
+            }
+        }
 
         if (applied > 0) {
             console.log(
                 `[DK Label] Applied: ${applied} items`
             );
         }
-
     }
 
     // =========================================================
@@ -666,9 +866,9 @@
 
     function installObserver() {
         const userList =
-            document.querySelector(
-                ".user-list"
-            );
+              document.querySelector(
+                  ".user-list"
+              );
 
         if (!userList) {
             setTimeout(
@@ -680,9 +880,9 @@
         }
 
         const observer =
-            new MutationObserver(() => {
-                applyAll();
-            });
+              new MutationObserver(() => {
+                  applyAll();
+              });
 
         observer.observe(
             userList,
@@ -698,12 +898,123 @@
     }
 
     // =========================================================
+    // WORKSPACE COMBOBOX UI
+    // =========================================================
+
+    function createWorkspaceCombobox() {
+        if (document.querySelector("#dk-workspace-combobox")) {
+            return;
+        }
+
+        const target =
+              document.querySelector(
+                  'div[data-class="DynamicButton"]'
+              )?.parentElement;
+
+        if (!target) {
+            setTimeout(createWorkspaceCombobox, 1000);
+            return;
+        }
+
+        const select = document.createElement("select");
+
+        select.id = "dk-workspace-combobox";
+
+        select.style.cssText = `
+        width: 180px;
+        height: 32px;
+        margin-bottom: 5px;
+        padding: 2px 6px;
+        box-sizing: border-box;
+        border: 1px solid #aaa;
+        border-radius: 4px;
+        background: #fff;
+        color: #222;
+        font-size: 14px;
+        outline: none;
+    `;
+
+        const option = document.createElement("option");
+
+        option.value = "";
+        option.textContent = "Workspace";
+
+        select.appendChild(option);
+
+        target.parentElement.insertBefore(
+            select,
+            target
+        );
+
+        console.log(
+            "[DK Workspace] Combobox created"
+        );
+    }
+
+    // =========================================================
     // START
     // =========================================================
 
     console.log(
         "[DK Label] READY v2.2.0"
     );
+
+    createWorkspaceCombobox();
+
+    setTimeout(() => {
+        loadWorkspaceOptions();
+    }, 1000);
+    async function loadWorkspaceOptions() {
+        if (!supabase) {
+            return;
+        }
+
+        const select =
+              document.querySelector(
+                  "#dk-workspace-combobox"
+              );
+
+        if (!select) {
+            return;
+        }
+
+        const { data: workspaces, error } =
+              await supabase.rpc(
+                  "get_my_workspaces"
+              );
+
+        if (error) {
+            console.error(
+                "[DK Workspace] Failed to load workspaces:",
+                error
+            );
+            return;
+        }
+
+        // Xóa option cũ
+        select.innerHTML = "";
+
+        for (const workspace of workspaces || []) {
+            const option =
+                  document.createElement("option");
+
+            option.value = workspace.id;
+            option.textContent = workspace.name;
+
+            select.appendChild(option);
+        }
+
+        // Chọn workspace hiện tại
+        if (currentWorkspaceId) {
+            select.value =
+                String(currentWorkspaceId);
+        }
+
+        console.log(
+            "[DK Workspace] Options loaded:",
+            workspaces
+        );
+    }
 
     console.log(
         "[DK Label] Identity key: userInfo.openId"
