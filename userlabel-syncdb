@@ -132,10 +132,12 @@
         const openId = getOpenId(userInfo);
         currentUserOpenId = openId;
 
+
         if (!openId) {
             console.error("[DK] Cannot get current user openId");
             return;
         }
+
 
         // 1. Anonymous auth
         const { data: authData, error: authError } =
@@ -177,6 +179,7 @@
         // 3. Check workspaces
         const { data: workspaces, error: workspaceError } =
               await supabase.rpc("get_my_workspaces");
+        await loadWorkspaceOptions();
 
         if (workspaceError) {
             console.error(
@@ -193,58 +196,36 @@
 
         // 4. Already has workspace → do nothing
         if (workspaces && workspaces.length > 0) {
-            currentWorkspaceId = workspaces[0].id;
+
+            const ownWorkspace =
+                  workspaces.find(
+                      workspace =>
+                      workspace.owner_open_id ===
+                      currentUserOpenId
+                  );
+
+            const defaultWorkspace =
+                  ownWorkspace ||
+                  workspaces[0];
+
+            currentWorkspaceId =
+                defaultWorkspace.id;
+
             currentWorkspaceOwnerOpenId =
-                workspaces[0].owner_open_id;
+                defaultWorkspace.owner_open_id;
 
             console.log(
-                "[DK] Using workspace:",
-                currentWorkspaceId
+                "[DK] Using default workspace:",
+                defaultWorkspace
             );
 
-            console.log(
-                "[DK] Workspace owner:",
-                currentWorkspaceOwnerOpenId
-            );
             applyAll();
             return;
         }
 
-        // 5. No workspace → create one
-        const workspaceName =
-              `${openId} ${userInfo.nick || ""}`.trim();
-
-        const workspaceSecret =
-              crypto.randomUUID();
-
-        const { data: newWorkspace, error: createError } =
-              await supabase.rpc(
-                  "create_workspace",
-                  {
-                      p_name: workspaceName,
-                      p_secret: workspaceSecret
-                  }
-              );
-
-        if (createError) {
-            console.error(
-                "[DK] Create workspace failed:",
-                createError
-            );
-            return;
-        }
-
-        console.log(
-            "[DK] Workspace created:",
-            newWorkspace
-        );
-
-        currentWorkspaceId = newWorkspace.id;
-
-        console.log(
-            "[DK] Using workspace:",
-            currentWorkspaceId
-        );
+        // 5. No workspace → wait for user to create/join one
+        currentWorkspaceId = null;
+        currentWorkspaceOwnerOpenId = null;
     }
 
     const STORAGE_KEY = "__dk_user_labels_openid_v2__";
@@ -390,14 +371,24 @@
     // =========================================================
 
     async function ensureRecord(userInfo) {
+        // Capture workspace tại thời điểm request bắt đầu
+        const workspaceId = currentWorkspaceId;
+        const workspaceOwnerOpenId = currentWorkspaceOwnerOpenId;
+
         const openId = getOpenId(userInfo);
 
-        if (!openId || !currentWorkspaceId || !supabase) {
+        if (!openId || !workspaceId || !supabase) {
             return null;
         }
 
+        const localKey =
+              `${workspaceId}:${openId}`;
+
+        const isOwnWorkspace =
+              workspaceOwnerOpenId === currentUserOpenId;
+
         const requestKey =
-              `${currentWorkspaceId}:${openId}`;
+              `${workspaceId}:${openId}`;
 
         // Đang check user này → dùng chung Promise
         if (pendingRecords[requestKey]) {
@@ -410,9 +401,18 @@
             const { data, error } = await supabase
             .from("user_labels")
             .select("label")
-            .eq("workspace_id", currentWorkspaceId)
+            .eq("workspace_id", workspaceId)
             .eq("target_open_id", openId)
             .maybeSingle();
+
+            console.log(
+                "[DK Label] DB RESULT:",
+                {
+                    workspaceId,
+                    openId,
+                    data
+                }
+            );
 
             if (error) {
                 console.error(
@@ -425,16 +425,16 @@
 
             // 2. Supabase đã có label
             if (data) {
-                const oldRecord = records[openId];
-
                 const record = {
                     nick: userInfo.nick || "",
                     label: data.label || "",
                     updated: true
                 };
 
+                const oldRecord = records[localKey];
+
                 if (!oldRecord || oldRecord.label !== record.label) {
-                    records[openId] = record;
+                    records[localKey] = record;
                     saveRecords();
 
                     console.log(
@@ -448,7 +448,7 @@
             // 3. Supabase chưa có
             // Có local → dùng local
             // Không có local → dùng nickname
-            const oldRecord = records[openId];
+            const oldRecord = records[localKey];
             const currentNick = userInfo.nick || "";
 
             const record = oldRecord || {
@@ -457,14 +457,19 @@
                 updated: false
             };
 
-            records[openId] = record;
+            records[localKey] = record;
             saveRecords();
 
-            // 4. Tạo record trên Supabase
+            // Workspace của người khác → chỉ đọc, không tạo label
+            if (!isOwnWorkspace) {
+                return record;
+            }
+
+            // Workspace của mình → tạo record trên Supabase
             const { error: insertError } = await supabase
             .from("user_labels")
             .insert({
-                workspace_id: currentWorkspaceId,
+                workspace_id: workspaceId,
                 target_open_id: openId,
                 label: record.label,
                 created_by: currentUserOpenId,
@@ -498,7 +503,24 @@
     // =========================================================
     // CREATE UI
     // =========================================================
+    function updateSameOpenIdUI(workspaceId, openId, label, sourceInput) {
+        const items = document.querySelectorAll(".user-list .item");
 
+        for (const item of items) {
+            const userInfo = getUserInfoFromElement(item);
+            if (!userInfo) continue;
+
+            if (getOpenId(userInfo) !== openId) continue;
+
+            const input = item.querySelector(".dk-user-label-input");
+            if (!input || input === sourceInput) continue;
+
+            // Nếu nick kia cũng đang được gõ thì không đè input của nó
+            if (document.activeElement === input) continue;
+
+            input.value = label;
+        }
+    }
     function createUI(item, userInfo, record) {
         if (!item || !userInfo || !record) {
             return;
@@ -581,7 +603,15 @@
         // -----------------------------------------------------
 
         input.addEventListener("input", function () {
-            const currentRecord = records[openId];
+
+            // Chụp workspace ngay tại thời điểm người dùng gõ
+            const workspaceIdAtInput = currentWorkspaceId;
+
+            const localKey =
+                  `${workspaceIdAtInput}:${openId}`;
+
+            const currentRecord =
+                  records[localKey];
 
             if (!currentRecord) {
                 return;
@@ -592,7 +622,12 @@
             currentRecord.updated = true;
 
             saveRecords();
-            applyAll();
+            updateSameOpenIdUI(
+                workspaceIdAtInput,
+                openId,
+                currentRecord.label,
+                input
+            );
 
             console.log(
                 `[DK Label] Saved local: ${openId} → ${currentRecord.label}`
@@ -601,15 +636,20 @@
             // -----------------------------------------------------
             // Supabase: debounce 500ms
             // -----------------------------------------------------
-
             clearTimeout(currentRecord.updateTimer);
 
             currentRecord.updateTimer = setTimeout(async function () {
-                if (!supabase || !currentWorkspaceId || !currentUserOpenId) {
+
+                if (
+                    !supabase ||
+                    !workspaceIdAtInput ||
+                    !currentUserOpenId
+                ) {
                     return;
                 }
 
-                const labelToSave = currentRecord.label;
+                const labelToSave =
+                      currentRecord.label;
 
                 const { error } = await supabase
                 .from("user_labels")
@@ -618,7 +658,7 @@
                     updated_by: currentUserOpenId,
                     updated_at: new Date().toISOString()
                 })
-                .eq("workspace_id", currentWorkspaceId)
+                .eq("workspace_id", workspaceIdAtInput)
                 .eq("target_open_id", openId);
 
                 if (error) {
@@ -631,6 +671,7 @@
                         `[DK Label] Updated Supabase: ${openId} → ${labelToSave}`
                     );
                 }
+
             }, 500);
         });
 
@@ -744,18 +785,21 @@
         const openId =
               getOpenId(userInfo);
 
-        if (!openId) {
-            return;
-        }
+        if (!openId) return;
+
+        const workspaceIdAtProcess = currentWorkspaceId;
 
         const userKey =
-              `${currentWorkspaceId}:${openId}`;
+              `${workspaceIdAtProcess}:${openId}`;
+
+
 
         // =====================================================
         // 1. LOCAL FIRST
         // =====================================================
 
-        let record = records[openId];
+        const localKey = `${workspaceIdAtProcess}:${openId}`;
+        let record = records[localKey];
 
         // Chưa có local → dùng nickname làm label tạm
         if (!record) {
@@ -767,7 +811,7 @@
                 updated: false
             };
 
-            records[openId] = record;
+            records[localKey] = record;
             saveRecords();
         }
 
@@ -796,19 +840,17 @@
         // =====================================================
         // 3. SUPABASE SYNC BACKGROUND
         // =====================================================
-
         ensureRecord(userInfo)
             .then((syncedRecord) => {
-            if (!syncedRecord) {
+            if (!syncedRecord) return;
+
+            if (currentWorkspaceId !== workspaceIdAtProcess) {
                 return;
             }
 
-            // DB có kết quả mới → cập nhật UI
-            updateExistingUI(
-                item,
-                syncedRecord
-            );
+            updateExistingUI(item, syncedRecord);
         })
+
             .catch((err) => {
             console.error(
                 `[DK Label] Background sync failed: ${openId}`,
@@ -922,9 +964,13 @@
     // =========================================================
     // WORKSPACE COMBOBOX UI
     // =========================================================
-
+    function clearLabelUI() {
+        document
+            .querySelectorAll(".dk-user-label-wrap")
+            .forEach(el => el.remove());
+    }
     function createWorkspaceCombobox() {
-        if (document.querySelector("#dk-workspace-combobox")) {
+        if (document.querySelector("#dk-workspace-panel")) {
             return;
         }
 
@@ -938,6 +984,21 @@
             return;
         }
 
+        const panel = document.createElement("div");
+
+        panel.id = "dk-workspace-panel";
+
+        panel.style.cssText = `
+        width: 180px;
+        margin-bottom: 5px;
+        box-sizing: border-box;
+        font-size: 14px;
+    `;
+
+        // =========================================================
+        // COMBOBOX
+        // =========================================================
+
         const select = document.createElement("select");
 
         select.id = "dk-workspace-combobox";
@@ -945,7 +1006,6 @@
         select.style.cssText = `
         width: 180px;
         height: 32px;
-        margin-bottom: 5px;
         padding: 2px 6px;
         box-sizing: border-box;
         border: 1px solid #aaa;
@@ -956,29 +1016,575 @@
         outline: none;
     `;
 
-        const option = document.createElement("option");
+        const defaultOption = document.createElement("option");
 
-        option.value = "";
-        option.textContent = "Workspace";
+        defaultOption.value = "";
+        defaultOption.textContent = "Workspace";
 
-        select.appendChild(option);
+        select.appendChild(defaultOption);
+
+        panel.appendChild(select);
+
+        // =========================================================
+        // ACTION AREA
+        // =========================================================
+
+        const actionArea = document.createElement("div");
+
+        actionArea.style.cssText = `
+        margin-top: 5px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    `;
+
+        // =========================================================
+        // JOIN WORKSPACE
+        // =========================================================
+
+        const joinTitle = document.createElement("div");
+
+        joinTitle.textContent = "🔗 Join workspace";
+
+        joinTitle.style.cssText = `
+        font-weight: bold;
+        cursor: pointer;
+        user-select: none;
+    `;
+
+        const joinArea = document.createElement("div");
+
+        joinArea.style.cssText = `
+        display: none;
+        flex-direction: column;
+        gap: 4px;
+    `;
+
+        const joinNameInput = document.createElement("input");
+
+        joinNameInput.type = "text";
+        joinNameInput.placeholder = "Workspace name";
+
+        joinNameInput.style.cssText = `
+        width: 180px;
+        height: 28px;
+        padding: 2px 6px;
+        box-sizing: border-box;
+        border: 1px solid #aaa;
+        border-radius: 4px;
+        font-size: 13px;
+        outline: none;
+    `;
+
+        const joinSecretInput = document.createElement("input");
+
+        joinSecretInput.type = "password";
+        joinSecretInput.placeholder = "Secret";
+
+        joinSecretInput.style.cssText = `
+        width: 180px;
+        height: 28px;
+        padding: 2px 6px;
+        box-sizing: border-box;
+        border: 1px solid #aaa;
+        border-radius: 4px;
+        font-size: 13px;
+        outline: none;
+    `;
+
+        const joinButton = document.createElement("button");
+
+        joinButton.type = "button";
+        joinButton.textContent = "Join";
+
+        joinButton.style.cssText = `
+        width: 180px;
+        height: 28px;
+        cursor: pointer;
+        border: 1px solid #aaa;
+        border-radius: 4px;
+        background: #f5f5f5;
+        color: #222;
+        font-size: 13px;
+    `;
+
+        joinArea.appendChild(joinNameInput);
+        joinArea.appendChild(joinSecretInput);
+        joinArea.appendChild(joinButton);
+
+        joinTitle.addEventListener("click", function () {
+            joinArea.style.display =
+                joinArea.style.display === "none"
+                ? "flex"
+            : "none";
+        });
+
+        joinButton.addEventListener("click", async function (e) {
+            e.stopPropagation();
+
+            if (!supabase || !currentUserOpenId) {
+                return;
+            }
+
+            const workspaceName = joinNameInput.value.trim();
+            const workspaceSecret = joinSecretInput.value.trim();
+
+            if (!workspaceName || !workspaceSecret) {
+                alert("Please enter workspace name and secret.");
+                return;
+            }
+
+            joinButton.disabled = true;
+
+            try {
+
+                // 1. Join workspace qua RPC
+                const { data: workspace, error: workspaceError } =
+                      await supabase.rpc(
+                          "join_workspace",
+                          {
+                              p_workspace_name: workspaceName,
+                              p_secret: workspaceSecret
+                          }
+                      );
+
+                if (workspaceError) {
+                    console.error(
+                        "[DK Workspace] Join workspace failed:",
+                        workspaceError
+                    );
+
+                    alert(
+                        "Join workspace failed: " +
+                        workspaceError.message
+                    );
+
+                    return;
+                }
+
+                if (!workspace) {
+                    alert("Workspace not found.");
+                    return;
+                }
+                // 5. Chuyển sang workspace vừa join
+                Object.keys(activeUsers).forEach(key => delete activeUsers[key]);
+
+                clearLabelUI();
+
+                currentWorkspaceId = workspace.id;
+                currentWorkspaceOwnerOpenId = workspace.owner_open_id;
+
+                // 6. Xóa input
+                joinNameInput.value = "";
+                joinSecretInput.value = "";
+
+                // 7. Reload combobox
+                await loadWorkspaceOptions();
+
+                const select =
+                      document.querySelector(
+                          "#dk-workspace-combobox"
+                      );
+
+                if (select) {
+                    select.value =
+                        String(currentWorkspaceId);
+                }
+
+                console.log(
+                    "[DK Workspace] Joined workspace:",
+                    workspace
+                );
+
+                // 8. Apply label
+                applyAll();
+
+            } finally {
+                joinButton.disabled = false;
+            }
+        });
+
+        // =========================================================
+        // CREATE OWN WORKSPACE
+        // =========================================================
+
+        const createTitle = document.createElement("div");
+
+        createTitle.textContent =
+            "➕ Create own workspace";
+
+        createTitle.style.cssText = `
+        font-weight: bold;
+        cursor: pointer;
+        user-select: none;
+    `;
+
+        createTitle.addEventListener("click", async function () {
+            if (!supabase || !currentUserOpenId) {
+                return;
+            }
+
+
+
+            createTitle.style.pointerEvents = "none";
+
+            try {
+                // Kiểm tra workspace của chính user
+                const { data: workspaces, error: wsError } =
+                      await supabase.rpc("get_my_workspaces");
+
+                if (wsError) {
+                    console.error(
+                        "[DK Workspace] Failed to load workspaces:",
+                        wsError
+                    );
+                    return;
+                }
+
+                const ownWorkspace = (workspaces || []).find(
+                    workspace =>
+                    workspace.owner_open_id === currentUserOpenId
+                );
+
+                // =========================================
+                // ĐÃ CÓ WORKSPACE → GET SECRET
+                // =========================================
+                if (ownWorkspace) {
+
+                    const { data: secret, error: secretError } =
+                          await supabase.rpc(
+                              "get_my_workspace_secret",
+                              {
+                                  p_workspace_id: ownWorkspace.id
+                              }
+                          );
+
+                    if (secretError) {
+                        console.error(
+                            "[DK Workspace] Failed to get secret:",
+                            secretError
+                        );
+
+                        alert(
+                            "Failed to get workspace secret: " +
+                            secretError.message
+                        );
+
+                        return;
+                    }
+
+                    // =====================================================
+                    // SECRET POPUP
+                    // =====================================================
+
+                    const overlay = document.createElement("div");
+
+                    overlay.style.cssText = `
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 999999;
+    `;
+
+                    const box = document.createElement("div");
+
+                    box.style.cssText = `
+        width: 360px;
+        padding: 18px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+        box-sizing: border-box;
+        font-family: Arial, sans-serif;
+    `;
+
+                    const title = document.createElement("div");
+
+                    title.textContent = "🔑 Workspace secret";
+
+                    title.style.cssText = `
+        font-size: 17px;
+        font-weight: bold;
+        margin-bottom: 14px;
+        color: #222;
+    `;
+
+                    function createCopyRow(label, value) {
+
+                        const row = document.createElement("div");
+
+                        row.style.cssText = `
+            margin-bottom: 12px;
+        `;
+
+                        const labelEl = document.createElement("div");
+
+                        labelEl.textContent = label;
+
+                        labelEl.style.cssText = `
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 4px;
+            color: #555;
+        `;
+
+                        const line = document.createElement("div");
+
+                        line.style.cssText = `
+            display: flex;
+            gap: 5px;
+        `;
+
+                        const input = document.createElement("input");
+
+                        input.type = "text";
+                        input.value = value;
+                        input.readOnly = true;
+
+                        input.style.cssText = `
+            flex: 1;
+            height: 30px;
+            padding: 3px 6px;
+            box-sizing: border-box;
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #222;
+            background: #f8f8f8;
+        `;
+
+                        const copyButton = document.createElement("button");
+
+                        copyButton.type = "button";
+                        copyButton.textContent = "Copy";
+
+                        copyButton.style.cssText = `
+            width: 60px;
+            height: 30px;
+            cursor: pointer;
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            background: #f5f5f5;
+            color: #222;
+            font-size: 12px;
+        `;
+
+                        copyButton.addEventListener("click", async function () {
+
+                            try {
+
+                                await navigator.clipboard.writeText(value);
+
+                                copyButton.textContent = "Copied";
+
+                                setTimeout(() => {
+                                    copyButton.textContent = "Copy";
+                                }, 1000);
+
+                            } catch (err) {
+
+                                input.select();
+                                document.execCommand("copy");
+
+                                copyButton.textContent = "Copied";
+
+                                setTimeout(() => {
+                                    copyButton.textContent = "Copy";
+                                }, 1000);
+                            }
+                        });
+
+                        line.appendChild(input);
+                        line.appendChild(copyButton);
+
+                        row.appendChild(labelEl);
+                        row.appendChild(line);
+
+                        return row;
+                    }
+
+                    box.appendChild(title);
+
+                    box.appendChild(
+                        createCopyRow(
+                            "Workspace name",
+                            ownWorkspace.name
+                        )
+                    );
+
+                    box.appendChild(
+                        createCopyRow(
+                            "Secret",
+                            secret
+                        )
+                    );
+
+                    const closeButton = document.createElement("button");
+
+                    closeButton.type = "button";
+                    closeButton.textContent = "Close";
+
+                    closeButton.style.cssText = `
+        width: 100%;
+        height: 30px;
+        margin-top: 4px;
+        cursor: pointer;
+        border: 1px solid #aaa;
+        border-radius: 4px;
+        background: #f5f5f5;
+        color: #222;
+        font-size: 13px;
+    `;
+
+                    closeButton.addEventListener("click", function () {
+                        overlay.remove();
+                    });
+
+                    box.appendChild(closeButton);
+
+                    overlay.appendChild(box);
+
+                    overlay.addEventListener("click", function (e) {
+                        if (e.target === overlay) {
+                            overlay.remove();
+                        }
+                    });
+
+                    document.body.appendChild(overlay);
+
+                    return;
+                }
+
+                const confirmed = confirm(
+                    "Create your own workspace?"
+                );
+
+                if (!confirmed) {
+                    return;
+                }
+
+                // =========================================
+                // CHƯA CÓ WORKSPACE → CREATE
+                // =========================================
+
+                const workspaceName =
+                      `${currentUserOpenId} ${getMyUserInfo()?.nick || ""}`.trim();
+
+                const generatedSecret =
+                      crypto.randomUUID().replace(/-/g, "");
+
+                const { data: newWorkspace, error: createError } =
+                      await supabase.rpc(
+                          "create_workspace",
+                          {
+                              p_name: workspaceName,
+                              p_secret: generatedSecret
+                          }
+                      );
+
+                if (createError) {
+                    console.error(
+                        "[DK Workspace] Failed to create workspace:",
+                        createError
+                    );
+
+                    alert(
+                        "Failed to create workspace: " +
+                        createError.message
+                    );
+
+                    return;
+                }
+
+                clearLabelUI();
+
+                Object.keys(activeUsers).forEach(key => {
+                    delete activeUsers[key];
+                });
+
+                currentWorkspaceId =
+                    newWorkspace.id;
+
+                currentWorkspaceOwnerOpenId =
+                    newWorkspace.owner_open_id;
+
+                alert(
+                    `Workspace created!\n\nWorkspace: ${newWorkspace.name}\n\nSecret:\n${generatedSecret}`
+                );
+
+                await loadWorkspaceOptions();
+
+                const select =
+                      document.querySelector(
+                          "#dk-workspace-combobox"
+                      );
+
+                if (select) {
+                    select.value =
+                        String(currentWorkspaceId);
+                }
+
+                applyAll();
+
+            } finally {
+                createTitle.style.pointerEvents = "auto";
+            }
+        });
+
+        // =========================================================
+        // SAVE UI REFERENCES
+        // =========================================================
+
+        window.dkWorkspaceUI = {
+            joinTitle,
+            joinArea,
+            joinNameInput,
+            joinSecretInput,
+            joinButton,
+            createTitle
+        };
+
+
+        // =========================================================
+        // APPEND
+        // =========================================================
+
+        actionArea.appendChild(joinTitle);
+        actionArea.appendChild(joinArea);
+
+        actionArea.appendChild(createTitle);
+
+
+        panel.appendChild(actionArea);
 
         target.parentElement.insertBefore(
-            select,
+            panel,
             target
         );
 
+        // =========================================================
+        // SWITCH WORKSPACE
+        // =========================================================
+
         select.addEventListener("change", function () {
             const newWorkspaceId = this.value;
+            if (!newWorkspaceId) return;
 
-            if (!newWorkspaceId) {
-                return;
-            }
+            Object.keys(activeUsers).forEach(key => {
+                delete activeUsers[key];
+            });
+
+            clearLabelUI();
 
             currentWorkspaceId = Number(newWorkspaceId);
 
             currentWorkspaceOwnerOpenId =
-                this.options[this.selectedIndex].dataset.ownerOpenId;
+                this.options[
+                this.selectedIndex
+            ].dataset.ownerOpenId;
 
             console.log(
                 "[DK Workspace] Switched to:",
@@ -994,7 +1600,7 @@
         });
 
         console.log(
-            "[DK Workspace] Combobox created"
+            "[DK Workspace] Combobox + actions created"
         );
     }
 
@@ -1008,9 +1614,6 @@
 
     createWorkspaceCombobox();
 
-    setTimeout(() => {
-        loadWorkspaceOptions();
-    }, 1000);
     async function loadWorkspaceOptions() {
         if (!supabase) {
             return;
@@ -1041,26 +1644,88 @@
         // Xóa option cũ
         select.innerHTML = "";
 
+
+        // Thêm các workspace
         for (const workspace of workspaces || []) {
             const option =
                   document.createElement("option");
 
             option.value = workspace.id;
             option.textContent = workspace.name;
-            option.dataset.ownerOpenId = workspace.owner_open_id;
+            option.dataset.ownerOpenId =
+                workspace.owner_open_id;
 
             select.appendChild(option);
         }
 
+        // =========================================================
+        // CHECK USER ĐÃ CÓ OWN WORKSPACE CHƯA
+        // =========================================================
+
+        const hasOwnWorkspace =
+              (workspaces || []).some(
+                  workspace =>
+                  workspace.owner_open_id ===
+                  currentUserOpenId
+              );
+
+        if (window.dkWorkspaceUI) {
+
+            window.dkWorkspaceUI.createTitle.textContent =
+                hasOwnWorkspace
+                ? "🔑 Get secret"
+            : "➕ Create own workspace";
+
+            window.dkWorkspaceUI.createTitle.style.display =
+                "block";
+        }
+
         // Chọn workspace hiện tại
-        if (currentWorkspaceId) {
+        // =========================================================
+        // DEFAULT WORKSPACE
+        // Ưu tiên workspace mình làm OWNER
+        // Nếu không có → lấy workspace đầu tiên mình là MEMBER
+        // =========================================================
+
+        const ownWorkspace =
+              (workspaces || []).find(
+                  workspace =>
+                  workspace.owner_open_id ===
+                  currentUserOpenId
+              );
+
+        const defaultWorkspace =
+              ownWorkspace ||
+              (workspaces || [])[0];
+
+        if (defaultWorkspace) {
+
+            currentWorkspaceId =
+                defaultWorkspace.id;
+
+            currentWorkspaceOwnerOpenId =
+                defaultWorkspace.owner_open_id;
+
             select.value =
-                String(currentWorkspaceId);
+                String(defaultWorkspace.id);
+
+            console.log(
+                "[DK Workspace] Default workspace:",
+                defaultWorkspace
+            );
+
+            applyAll();
+
         }
 
         console.log(
             "[DK Workspace] Options loaded:",
             workspaces
+        );
+
+        console.log(
+            "[DK Workspace] Has own workspace:",
+            hasOwnWorkspace
         );
     }
 
