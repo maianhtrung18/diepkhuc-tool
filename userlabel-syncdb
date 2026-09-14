@@ -20,6 +20,7 @@
 
     let supabase = null;
     let currentWorkspaceId = null;
+    let currentWorkspaceOwnerOpenId = null;
     let currentUserOpenId = null;
     const pendingRecords = {};
     const activeUsers = {};
@@ -193,12 +194,19 @@
         // 4. Already has workspace → do nothing
         if (workspaces && workspaces.length > 0) {
             currentWorkspaceId = workspaces[0].id;
+            currentWorkspaceOwnerOpenId =
+                workspaces[0].owner_open_id;
 
             console.log(
                 "[DK] Using workspace:",
                 currentWorkspaceId
             );
 
+            console.log(
+                "[DK] Workspace owner:",
+                currentWorkspaceOwnerOpenId
+            );
+            applyAll();
             return;
         }
 
@@ -417,18 +425,22 @@
 
             // 2. Supabase đã có label
             if (data) {
+                const oldRecord = records[openId];
+
                 const record = {
                     nick: userInfo.nick || "",
                     label: data.label || "",
                     updated: true
                 };
 
-                records[openId] = record;
-                saveRecords();
+                if (!oldRecord || oldRecord.label !== record.label) {
+                    records[openId] = record;
+                    saveRecords();
 
-                console.log(
-                    `[DK Label] Loaded from Supabase: ${openId} → ${record.label}`
-                );
+                    console.log(
+                        `[DK Label] DB changed: ${openId} → ${record.label}`
+                    );
+                }
 
                 return record;
             }
@@ -543,6 +555,12 @@
         input.type = "text";
 
         input.value = record.label || "";
+        if (
+            currentWorkspaceOwnerOpenId &&
+            currentWorkspaceOwnerOpenId !== currentUserOpenId
+        ) {
+            input.disabled = true;
+        }
 
         input.style.cssText = `
             width: 130px;
@@ -685,6 +703,10 @@
         if (!input) {
             return;
         }
+
+        input.disabled =
+            currentWorkspaceOwnerOpenId &&
+            currentWorkspaceOwnerOpenId !== currentUserOpenId;
 
         // Đang gõ
         if (document.activeElement === input) {
@@ -946,6 +968,31 @@
             target
         );
 
+        select.addEventListener("change", function () {
+            const newWorkspaceId = this.value;
+
+            if (!newWorkspaceId) {
+                return;
+            }
+
+            currentWorkspaceId = Number(newWorkspaceId);
+
+            currentWorkspaceOwnerOpenId =
+                this.options[this.selectedIndex].dataset.ownerOpenId;
+
+            console.log(
+                "[DK Workspace] Switched to:",
+                currentWorkspaceId
+            );
+
+            console.log(
+                "[DK Workspace] Workspace owner:",
+                currentWorkspaceOwnerOpenId
+            );
+
+            applyAll();
+        });
+
         console.log(
             "[DK Workspace] Combobox created"
         );
@@ -1000,6 +1047,7 @@
 
             option.value = workspace.id;
             option.textContent = workspace.name;
+            option.dataset.ownerOpenId = workspace.owner_open_id;
 
             select.appendChild(option);
         }
