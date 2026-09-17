@@ -38,6 +38,7 @@
     let sendButton = null;
     let dkManualChatSending = false;
     let rainbowChatEnabled = false;
+    let rainbowChatStyle = "random";
 
     let mediaRecorder = null;
     let recordedChunks = [];
@@ -47,7 +48,7 @@
 
 
 
-     // Audio control
+    // Audio control
     let audioControlEnabled = false;
 
     const originalPlay = HTMLMediaElement.prototype.play;
@@ -250,7 +251,7 @@
             return;
         }
 
-       const mainSection = document.querySelector('.main-section');
+        const mainSection = document.querySelector('.main-section');
 
         if (mainSection) {
             mainSection.style.position = 'relative';
@@ -346,16 +347,16 @@
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-   function sleep(ms) {
-       return new Promise(resolve => {
-           currentResolve = resolve;
-           currentTimeout = setTimeout(() => {
-               currentTimeout = null;
-               currentResolve = null;
-               resolve();
-           }, ms);
-       });
-   }
+    function sleep(ms) {
+        return new Promise(resolve => {
+            currentResolve = resolve;
+            currentTimeout = setTimeout(() => {
+                currentTimeout = null;
+                currentResolve = null;
+                resolve();
+            }, ms);
+        });
+    }
 
     function clearSleep() {
         if (currentTimeout) {
@@ -410,36 +411,518 @@
     // 🌈 RAINBOW COLORS
     //////////////////////////////////////////////////////
 
-    const RAINBOW_COLORS = [
-        "f00", "f30", "f60", "f90",
-        "fc0", "ff0", "ff0", "ef0",
-        "cf0", "af0", "8f0", "6f0",
-        "4f0", "2f0", "0f0", "0fc",
-        "0ff", "0cf", "09f", "06f",
-        "03f", "00f", "30f", "60f",
-        "90f", "c0f", "f0f", "f0c",
-        "f09", "f06", "f03", "f00"
-    ];
+    //////////////////////////////////////////////////////
+    // 🌈 RAINBOW COLORS
+    //////////////////////////////////////////////////////
 
-    function rainbowEncodeUserChat(text) {
-        // Xóa color code cũ nếu có
-        text = text.replace(/\[[0-9a-fA-F]{3}\]/g, "");
+    function hslTo3Hex(h, s = 100, l = 50) {
+        s /= 100;
+        l /= 100;
 
-        // Random vị trí bắt đầu
-        const start = Math.floor(Math.random() * RAINBOW_COLORS.length);
+        const k = n => (n + h / 30) % 12;
+        const a = s * Math.min(l, 1 - l);
 
-        let result = "";
+        const f = n =>
+        l - a * Math.max(
+            -1,
+            Math.min(k(n) - 3, Math.min(9 - k(n), 1))
+        );
 
-        for (let i = 0; i < text.length; i++) {
-            const color = RAINBOW_COLORS[
-                (start + i) % RAINBOW_COLORS.length
-            ];
+        const rgb = [f(0), f(8), f(4)].map(x =>
+                                           Math.round(x * 15)
+                                          );
 
-            result += `[${color}]${text[i]}`;
+        return rgb.map(x => x.toString(16)).join("");
+    }
+
+
+    // Tạo palette 3-digit nhưng phân bố màu đều hơn
+    function hex3ToRgb(color) {
+        return color.split("").map(x => parseInt(x, 16));
+    }
+
+    function createMultiGradientPalette(keyColors, totalCount = 32) {
+
+        const parseColor = color =>
+        color
+        .replace("#", "")
+        .split("")
+        .map(x => parseInt(x, 16));
+
+        const formatColor = rgb =>
+        rgb.map(x => x.toString(16)).join("");
+
+        const colors = keyColors.map(parseColor);
+
+        if (colors.length === 0) return [];
+        if (colors.length === 1) {
+            return [formatColor(colors[0])];
         }
+
+        const segmentCount = colors.length - 1;
+        const totalSteps = totalCount - 1;
+
+        // ==========================================
+        // Tính khoảng cách RGB từng đoạn
+        // ==========================================
+
+        const distances = [];
+
+        for (let i = 0; i < segmentCount; i++) {
+
+            const a = colors[i];
+            const b = colors[i + 1];
+
+            const distance =
+                  Math.abs(b[0] - a[0]) +
+                  Math.abs(b[1] - a[1]) +
+                  Math.abs(b[2] - a[2]);
+
+            distances.push(distance);
+        }
+
+        const totalDistance =
+              distances.reduce((sum, d) => sum + d, 0);
+
+
+        // ==========================================
+        // Phân bổ tổng 31 bước cho các segment
+        // ==========================================
+
+        const segmentSteps = new Array(segmentCount).fill(1);
+
+        if (totalSteps >= segmentCount) {
+
+            // Mỗi segment tối thiểu 1 bước
+            let remaining = totalSteps - segmentCount;
+
+            const allocation = distances.map((distance, index) => {
+
+                const exact =
+                      remaining * distance / totalDistance;
+
+                return {
+                    index,
+                    base: Math.floor(exact),
+                    fraction: exact - Math.floor(exact)
+                };
+            });
+
+            // Cộng phần nguyên
+            for (const item of allocation) {
+                segmentSteps[item.index] += item.base;
+            }
+
+            let allocated =
+                segmentSteps.reduce((sum, n) => sum + n, 0);
+
+            let left = totalSteps - allocated;
+
+            // Phần dư lớn nhất nhận thêm step
+            allocation.sort(
+                (a, b) => b.fraction - a.fraction
+            );
+
+            let i = 0;
+
+            while (left > 0) {
+
+                segmentSteps[
+                    allocation[i % allocation.length].index
+                ]++;
+
+                left--;
+                i++;
+            }
+        }
+
+
+        // ==========================================
+        // Tạo màu bằng RGB path
+        // ==========================================
+
+        const result = [];
+
+        // Màu đầu tiên
+        result.push(formatColor(colors[0]));
+
+
+        for (let segment = 0; segment < segmentCount; segment++) {
+
+            const start = colors[segment];
+            const end = colors[segment + 1];
+
+            const steps = segmentSteps[segment];
+
+            if (steps <= 0) continue;
+
+
+            // --------------------------------------
+            // Khoảng thay đổi của từng channel
+            // --------------------------------------
+
+            const dr = end[0] - start[0];
+            const dg = end[1] - start[1];
+            const db = end[2] - start[2];
+
+
+            // --------------------------------------
+            // Tạo từng bước.
+            //
+            // Mỗi channel thay đổi đều theo hướng
+            // của nó.
+            // --------------------------------------
+
+            let previous = [...start];
+
+            for (let step = 1; step <= steps; step++) {
+
+                const ratio = step / steps;
+
+                let r =
+                    start[0] +
+                    Math.round(dr * ratio);
+
+                let g =
+                    start[1] +
+                    Math.round(dg * ratio);
+
+                let b =
+                    start[2] +
+                    Math.round(db * ratio);
+
+
+                // ----------------------------------
+                // Không cho channel đi ngược hướng
+                // ----------------------------------
+
+                if (dr > 0) {
+                    r = Math.max(previous[0], r);
+                    r = Math.min(end[0], r);
+                } else if (dr < 0) {
+                    r = Math.min(previous[0], r);
+                    r = Math.max(end[0], r);
+                } else {
+                    r = end[0];
+                }
+
+
+                if (dg > 0) {
+                    g = Math.max(previous[1], g);
+                    g = Math.min(end[1], g);
+                } else if (dg < 0) {
+                    g = Math.min(previous[1], g);
+                    g = Math.max(end[1], g);
+                } else {
+                    g = end[1];
+                }
+
+
+                if (db > 0) {
+                    b = Math.max(previous[2], b);
+                    b = Math.min(end[2], b);
+                } else if (db < 0) {
+                    b = Math.min(previous[2], b);
+                    b = Math.max(end[2], b);
+                } else {
+                    b = end[2];
+                }
+
+
+                const current = [r, g, b];
+
+                result.push(formatColor(current));
+
+                previous = current;
+            }
+        }
+
+
+        // ==========================================
+        // Đảm bảo đúng 32 màu
+        // ==========================================
+
+        if (result.length > totalCount) {
+            result.length = totalCount;
+        }
+
+        // Nếu thiếu thì thêm màu cuối
+        while (result.length < totalCount) {
+            result.push(
+                formatColor(colors[colors.length - 1])
+            );
+        }
+
+        // Luôn đảm bảo màu cuối là key color cuối
+        result[result.length - 1] =
+            formatColor(colors[colors.length - 1]);
 
         return result;
     }
+
+
+    const COLOR_STYLES = {
+
+        classic: createMultiGradientPalette(
+            [
+                "f04",
+                "ff0",
+                "0f0",
+                "0ff",
+                "00f",
+                "f0f",
+                "f04"
+            ],
+            24
+        ),
+
+        fire: createMultiGradientPalette(
+            [
+                "f00",
+                "f60",
+                "ff0"
+            ],
+            24
+        ),
+
+        ocean: createMultiGradientPalette(
+            [
+                "00f",
+                "0ff",
+                "0af"
+            ],
+            24
+        ),
+
+        forest: createMultiGradientPalette(
+            [
+                "0f0",
+                "0a0",
+                "050"
+            ],
+            24
+        ),
+
+        sunset: createMultiGradientPalette(
+            [
+                "f0f",
+                "f04",
+                "f80",
+                "ff0"
+            ],
+            24
+        ),
+
+        neon: createMultiGradientPalette(
+            [
+                "f0f",
+                "00f",
+                "0ff",
+                "0f0"
+            ],
+            24
+        )
+    };
+
+
+
+    function rainbowEncodeUserChat(text) {
+
+        text = text.trim();
+        // Xóa các mã màu cũ nếu text đã được rainbow encode
+        text = text.replace(/\[[0-9a-fA-F]{3}\]/g, '');
+
+        // Canvas để đo độ rộng text
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Lấy font thực tế của ô chat
+        if (chatTextarea) {
+            const style = getComputedStyle(chatTextarea);
+            ctx.font = style.font;
+        } else {
+            ctx.font = '16px Arial';
+        }
+
+        const textLength = [...text].length;
+        const textWidth = ctx.measureText(text).width;
+
+        const MAX_CHAT_LENGTH = 160;
+        const COLOR_CODE_LENGTH = 5;
+
+        const availableChars = MAX_CHAT_LENGTH - textLength;
+
+        const maxColorPoints = Math.floor(
+            availableChars / COLOR_CODE_LENGTH
+        );
+
+        const MAX_WIDTH =
+              maxColorPoints > 0
+        ? Math.ceil(textWidth / maxColorPoints) +5
+        : textWidth;
+
+        console.log("========== RAINBOW DEBUG ==========");
+        console.log("TEXT:", text);
+        console.log("FONT:", ctx.font);
+        console.log("TEXT LENGTH:", textLength);
+        console.log("TEXT WIDTH:", textWidth);
+        console.log("AVAILABLE CHARS:", availableChars);
+        console.log("MAX COLOR POINTS:", maxColorPoints);
+        console.log("MAX WIDTH:", MAX_WIDTH);
+        console.log("CHAR WIDTH:", ctx.measureText("1").width);
+
+        let result = '';
+        let currentText = '';
+        let pendingSpaces = '';
+
+        const styleNames = Object.keys(COLOR_STYLES);
+
+        const selectedStyle =
+              rainbowChatStyle === "random"
+        ? styleNames[Math.floor(Math.random() * styleNames.length)]
+        : rainbowChatStyle;
+
+        const colors = COLOR_STYLES[selectedStyle];
+
+        let colorIndex = 0;
+        let currentColor = null;
+
+        for (const char of text) {
+
+            if (char === '\n') {
+
+                if (currentText || pendingSpaces) {
+
+                    const color = colors[colorIndex];
+                    const segmentText = currentText + pendingSpaces;
+
+                    const segmentWidth = ctx.measureText(
+                        currentText.replace(/ /g, '')
+                    ).width;
+
+                    console.log(
+                        `>>> CHỐT SEGMENT NEWLINE: "${segmentText}"`,
+                        `WIDTH=${segmentWidth.toFixed(2)}px`,
+                        `MAX_WIDTH=${MAX_WIDTH.toFixed(2)}px`,
+                        `REMAINING=${(MAX_WIDTH - segmentWidth).toFixed(2)}px`,
+                        `COLOR=#${color}`
+                    );
+
+                    if (color !== currentColor) {
+                        result += `[${color}]`;
+                        currentColor = color;
+                    }
+
+                    result += segmentText;
+
+                    colorIndex =
+                        (colorIndex + 1) % colors.length;
+                }
+
+                result += '\n';
+
+                currentText = '';
+                pendingSpaces = '';
+
+                continue;
+            }
+
+            // Space đang chờ sẽ thuộc segment hiện tại
+            const candidate =
+                  currentText + pendingSpaces + char;
+
+            const testWidth = ctx.measureText(
+                candidate.replace(/ /g, '')
+            ).width;
+
+            console.log(
+                `TEST: "${candidate}"`,
+                `=> ${testWidth.toFixed(2)}px`,
+                testWidth > MAX_WIDTH ? "❌ VƯỢT" : "✅ OK"
+            );
+
+            if (currentText && testWidth > MAX_WIDTH) {
+
+                const color = colors[colorIndex];
+
+                const segmentText =
+                      currentText + pendingSpaces;
+
+                const segmentWidth = ctx.measureText(
+                    segmentText.replace(/ /g, '')
+                ).width;
+
+                console.log(
+                    `>>> CHỐT SEGMENT: "${segmentText}"`,
+                    `WIDTH=${segmentWidth.toFixed(2)}px`,
+                    `MAX_WIDTH=${MAX_WIDTH.toFixed(2)}px`,
+                    `REMAINING=${(MAX_WIDTH - segmentWidth).toFixed(2)}px`,
+                    `COLOR=#${color}`
+                );
+
+                if (color !== currentColor) {
+                    result += `[${color}]`;
+                    currentColor = color;
+                }
+
+                // Space gắn vào segment trước
+                result += segmentText;
+
+                colorIndex =
+                    (colorIndex + 1) % colors.length;
+
+                // Ký tự hiện tại bắt đầu segment mới
+                currentText = char;
+                pendingSpaces = '';
+
+            } else {
+
+                // Có thể thêm vào segment hiện tại
+                currentText += pendingSpaces + char;
+                pendingSpaces = '';
+            }
+        }
+
+        // ==========================================
+        // SEGMENT CUỐI
+        // ==========================================
+
+        if (currentText || pendingSpaces) {
+
+            const color = colors[colorIndex];
+
+            // Space cuối cũng gắn vào segment cuối
+            const finalText = currentText + pendingSpaces;
+
+            const segmentWidth = ctx.measureText(
+                currentText.replace(/ /g, '')
+            ).width;
+
+            console.log(
+                `>>> CHỐT SEGMENT: "${finalText}"`,
+                `WIDTH=${segmentWidth.toFixed(2)}px`,
+                `MAX_WIDTH=${MAX_WIDTH.toFixed(2)}px`,
+                `REMAINING=${(MAX_WIDTH - segmentWidth).toFixed(2)}px`,
+                segmentWidth <= MAX_WIDTH ? "✅ OK" : "❌ VƯỢT",
+                `COLOR=#${color}`
+            );
+
+            if (color !== currentColor) {
+                result += `[${color}]`;
+            }
+
+            result += finalText;
+        }
+
+        console.log("===================================");
+        console.log("🌈 RAINBOW RESULT:", result);
+        console.log("===================================");
+
+        return result;
+    }
+
+
+
 
     async function fastSend(message) {
         if (!message) return false;
@@ -467,8 +950,8 @@
         const start = Date.now();
         while (Date.now() - start < timeout && running) {
             const btn = [...document.querySelectorAll("button")].find(b =>
-                b.innerText?.trim().includes(text)
-            );
+                                                                      b.innerText?.trim().includes(text)
+                                                                     );
             if (btn) return btn;
             await delay(300);
         }
@@ -476,19 +959,19 @@
     }
 
     function getRoomItems() {
-    return [...document.querySelectorAll(".user-list .item")];
+        return [...document.querySelectorAll(".user-list .item")];
     }
 
     function getMicUsers() {
 
-       return getRoomItems().filter(item => item.querySelector(".info")?.innerText.trim() === "🎤")
-                .map(item => item.querySelector(".nick").innerText.trim());
+        return getRoomItems().filter(item => item.querySelector(".info")?.innerText.trim() === "🎤")
+            .map(item => item.querySelector(".nick").innerText.trim());
     }
 
     function getQueueUsers() {
 
         return getRoomItems().filter(item => /^\d+$/.test(item.querySelector(".info")?.innerText.trim() || ""))
-                .map(item => item.querySelector(".nick").innerText.trim());
+            .map(item => item.querySelector(".nick").innerText.trim());
     }
 
     function getReturnMicButton() {
@@ -724,8 +1207,8 @@
 
         for (const user of users) {
             const text = prefix.includes("@")
-                ? prefix.replace(/@/g, user)
-                : `${prefix} ${user}`;
+            ? prefix.replace(/@/g, user)
+            : `${prefix} ${user}`;
 
             if (text.length > MAX_LENGTH) {
                 alert("Nội dung quá dài!");
@@ -964,14 +1447,7 @@
             }
         }, true);
 
-        chatTextarea.addEventListener("input", () => {
-            if (!rainbowChatEnabled) return;
 
-            if (chatTextarea.value.length > 26) {
-                chatTextarea.value = chatTextarea.value.slice(0, 26);
-                chatTextarea.dispatchEvent(new Event("input", { bubbles: true }));
-            }
-        });
 
         const originalSendChat = window.sendChat;
 
@@ -1001,8 +1477,8 @@
         botBtn.onclick = async () => {
             const myNick = document.querySelector(".my-nick")?.innerText.trim();
             const users = [...document.querySelectorAll(".user-list .nick")]
-                .map(e => e.innerText.trim())
-                .filter(name => name && name !== myNick);
+            .map(e => e.innerText.trim())
+            .filter(name => name && name !== myNick);
 
             await sendGreeting(users);
         };
@@ -1020,23 +1496,23 @@
 
             const roomUsers = new Set(
                 [...document.querySelectorAll(".user-list .nick")]
-                    .map(e => e.innerText.trim())
+                .map(e => e.innerText.trim())
             );
 
             const chatUsers = [
                 ...document.querySelectorAll(".chat-message:not(.mine) > span:first-child")
             ]
-                .map(e => e.innerText.trim())
-                .filter(name => roomUsers.has(name));
+            .map(e => e.innerText.trim())
+            .filter(name => roomUsers.has(name));
 
-         //   const roomItems = [...document.querySelectorAll(".user-list .item")];
+            //   const roomItems = [...document.querySelectorAll(".user-list .item")];
             const micUsers = getMicUsers();
             const queueUsers = getQueueUsers();
 
 
 
             const users = [...new Set([...micUsers, ...queueUsers, ...chatUsers])]
-                .filter(name => name && name !== myNick);
+            .filter(name => name && name !== myNick);
 
             log(`Users: ${users.join(", ")}`);
 
@@ -1231,30 +1707,45 @@
             rainbowLabel.innerText = "Rainbow Chat";
             rainbowLabel.style.color = "white";
 
-            const rainbowBtn = document.createElement("button");
-            rainbowBtn.type = "button";
-            rainbowBtn.className = "btn btn-outline-warning";
-            rainbowBtn.innerText = "🌈 OFF";
 
-            rainbowBtn.onclick = () => {
-                rainbowChatEnabled = !rainbowChatEnabled;
-                if (rainbowChatEnabled && chatTextarea.value.length > 26) {
-                    chatTextarea.value = chatTextarea.value.slice(0, 26);
-                    chatTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+
+            const rainbowStyleSelect = document.createElement("select");
+
+            rainbowStyleSelect.style.width = "90px";
+            rainbowStyleSelect.style.marginLeft = "5px";
+
+            rainbowStyleSelect.innerHTML = `
+    <option value="off">🚫 OFF</option>
+    <option value="random">🎲 Random</option>
+    <option value="classic">🌈 Classic</option>
+    <option value="fire">🔥 Fire</option>
+    <option value="ocean">🌊 Ocean</option>
+    <option value="forest">🌲 Forest</option>
+    <option value="sunset">🌅 Sunset</option>
+    <option value="neon">💜 Neon</option>
+`;
+
+            rainbowStyleSelect.value =
+                rainbowChatEnabled ? rainbowChatStyle : "off";
+
+            rainbowStyleSelect.onchange = () => {
+                const value = rainbowStyleSelect.value;
+
+                if (value === "off") {
+                    rainbowChatEnabled = false;
+                } else {
+                    rainbowChatEnabled = true;
+                    rainbowChatStyle = value;
                 }
-
-                rainbowBtn.innerText = rainbowChatEnabled
-                    ? "🌈 ON"
-                : "🌈 OFF";
 
                 console.log(
                     "🌈 Rainbow:",
-                    rainbowChatEnabled ? "ON" : "OFF"
+                    rainbowChatEnabled ? `ON - ${rainbowChatStyle}` : "OFF"
                 );
             };
 
             rainbowRow.appendChild(rainbowLabel);
-            rainbowRow.appendChild(rainbowBtn);
+            rainbowRow.appendChild(rainbowStyleSelect);
 
             toolboxContent.appendChild(rainbowRow);
         }
@@ -1285,7 +1776,7 @@
 
         toolboxContent.appendChild(row3);
 
-       const audioRow = document.createElement("div");
+        const audioRow = document.createElement("div");
         audioRow.className = "toolbox-row";
 
         const audioText = document.createElement("label");
