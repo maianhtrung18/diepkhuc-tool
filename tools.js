@@ -39,6 +39,7 @@
     let dkManualChatSending = false;
     let rainbowChatEnabled = false;
     let rainbowChatStyle = "random";
+    let customColors = [];
 
     let mediaRecorder = null;
     let recordedChunks = [];
@@ -727,7 +728,9 @@
                 "0f0"
             ],
             24
-        )
+        ),
+        custom: createMultiGradientPalette([], 24)
+
     };
 
 
@@ -1720,6 +1723,134 @@
             rainbowStyleSelect.style.width = "90px";
             rainbowStyleSelect.style.marginLeft = "5px";
 
+            const customColorContainer = document.createElement("div");
+
+            customColorContainer.style.display = "none";
+            customColorContainer.style.alignItems = "center";
+            customColorContainer.style.gap = "4px";
+            customColorContainer.style.marginLeft = "5px";
+
+            const addCustomColorButton = document.createElement("button");
+
+            addCustomColorButton.type = "button";
+            addCustomColorButton.innerText = "+";
+            addCustomColorButton.title = "Thêm màu";
+            addCustomColorButton.style.padding = "1px 6px";
+            addCustomColorButton.style.cursor = "pointer";
+
+            customColorContainer.appendChild(addCustomColorButton);
+
+            function addCustomColorPicker() {
+
+                const colorInput = document.createElement("input");
+
+                colorInput.type = "color";
+                colorInput.value = "#ff0000";
+
+                colorInput.style.width = "28px";
+                colorInput.style.height = "28px";
+                colorInput.style.padding = "0";
+                colorInput.style.border = "none";
+                colorInput.style.cursor = "pointer";
+
+
+                // ==============================
+                // Thêm màu ban đầu
+                // ==============================
+
+                const hex = colorInput.value.replace("#", "");
+
+                const color3 =
+                      hex[0] +
+                      hex[2] +
+                      hex[4];
+
+                customColors.push(color3);
+
+                COLOR_STYLES.custom =
+                    createMultiGradientPalette(
+                    customColors,
+                    24
+                );
+
+
+                // ==============================
+                // Đổi màu
+                // ==============================
+
+                colorInput.onchange = () => {
+
+                    const hex = colorInput.value.replace("#", "");
+
+                    const color3 =
+                          hex[0] +
+                          hex[2] +
+                          hex[4];
+
+                    // Tìm vị trí hiện tại của input
+                    const index =
+                          [...customColorContainer.querySelectorAll('input[type="color"]')]
+                    .indexOf(colorInput);
+
+                    if (index !== -1) {
+
+                        customColors[index] = color3;
+
+                        COLOR_STYLES.custom =
+                            createMultiGradientPalette(
+                            customColors,
+                            24
+                        );
+                    }
+
+                    console.log(
+                        "🎨 Custom Colors:",
+                        customColors
+                    );
+                };
+
+
+                // ==============================
+                // Click phải = Xóa màu
+                // ==============================
+
+                colorInput.oncontextmenu = (e) => {
+
+                    e.preventDefault();
+
+                    const index =
+                          [...customColorContainer.querySelectorAll('input[type="color"]')]
+                    .indexOf(colorInput);
+
+                    if (index !== -1) {
+
+                        customColors.splice(index, 1);
+
+                        COLOR_STYLES.custom =
+                            createMultiGradientPalette(
+                            customColors,
+                            24
+                        );
+
+                        colorInput.remove();
+                    }
+
+                    console.log(
+                        "🎨 Custom Colors:",
+                        customColors
+                    );
+                };
+
+
+                customColorContainer.insertBefore(
+                    colorInput,
+                    addCustomColorButton
+                );
+            }
+            addCustomColorButton.onclick = () => {
+                addCustomColorPicker();
+            };
+
             rainbowStyleSelect.innerHTML = `
     <option value="off">🚫 OFF</option>
     <option value="random">🎲 Random</option>
@@ -1729,6 +1860,7 @@
     <option value="forest">🌲 Forest</option>
     <option value="sunset">🌅 Sunset</option>
     <option value="neon">💜 Neon</option>
+    <option value="custom">🎨 Custom</option>
 `;
 
             rainbowStyleSelect.value =
@@ -1744,6 +1876,9 @@
                     rainbowChatStyle = value;
                 }
 
+                customColorContainer.style.display =
+                    value === "custom" ? "flex" : "none";
+
                 console.log(
                     "🌈 Rainbow:",
                     rainbowChatEnabled ? `ON - ${rainbowChatStyle}` : "OFF"
@@ -1752,6 +1887,7 @@
 
             rainbowRow.appendChild(rainbowLabel);
             rainbowRow.appendChild(rainbowStyleSelect);
+            rainbowRow.appendChild(customColorContainer);
 
             toolboxContent.appendChild(rainbowRow);
         }
