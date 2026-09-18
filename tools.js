@@ -793,6 +793,10 @@
 
         const colors = COLOR_STYLES[selectedStyle];
 
+        if (!colors || colors.length === 0) {
+            return text;
+        }
+
         let colorIndex = 0;
         let currentColor = null;
 
@@ -824,8 +828,7 @@
 
                     result += segmentText;
 
-                    colorIndex =
-                        (colorIndex + 1) % colors.length;
+                    colorIndex = Math.min(colorIndex + 1, colors.length - 1);
                 }
 
                 result += '\n';
@@ -877,8 +880,7 @@
                 // Space gắn vào segment trước
                 result += segmentText;
 
-                colorIndex =
-                    (colorIndex + 1) % colors.length;
+                colorIndex = Math.min(colorIndex + 1, colors.length - 1);
 
                 // Ký tự hiện tại bắt đầu segment mới
                 currentText = char;
