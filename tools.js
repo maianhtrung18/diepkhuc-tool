@@ -96,7 +96,9 @@
 
         /* Phần thân toolbox */
         #my-dkhd-toolbox .toolbox-body {
-            width: 220px;
+            width: max-content;
+            min-width: 220px;
+            max-width: 500px;
             min-height: 120px;
             padding: 10px;
             box-sizing: border-box;
@@ -110,29 +112,33 @@
         }
 
         /* Chỗ để sau này nhét các nút */
-        #my-dkhd-toolbox .toolbox-content {
-        height: auto;
-        min-height: 100px;
-        padding: 8px;
+       #my-dkhd-toolbox .toolbox-content {
+    width: max-content;
+    min-width: 100%;
+    box-sizing: border-box;
 
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-start;
-        gap: 6px;
+    height: auto;
+    min-height: 100px;
+    padding: 8px;
 
-        border: 1px dashed rgba(255,255,255,0.25);
-        border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 6px;
 
-        color: rgba(255,255,255,0.4);
-        font-size: 16px;
-        }
+    border: 1px dashed rgba(255,255,255,0.25);
+    border-radius: 6px;
 
-        #my-dkhd-toolbox .toolbox-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            width: 100%;
-        }
+    color: rgba(255,255,255,0.4);
+    font-size: 16px;
+}
+   #my-dkhd-toolbox .toolbox-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: max-content;
+    min-width: 100%;
+}
 
         #my-dkhd-toolbox .toolbox-row label {
             flex: 1;
