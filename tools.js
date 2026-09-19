@@ -422,31 +422,6 @@
     // 🌈 RAINBOW COLORS
     //////////////////////////////////////////////////////
 
-    function hslTo3Hex(h, s = 100, l = 50) {
-        s /= 100;
-        l /= 100;
-
-        const k = n => (n + h / 30) % 12;
-        const a = s * Math.min(l, 1 - l);
-
-        const f = n =>
-        l - a * Math.max(
-            -1,
-            Math.min(k(n) - 3, Math.min(9 - k(n), 1))
-        );
-
-        const rgb = [f(0), f(8), f(4)].map(x =>
-                                           Math.round(x * 15)
-                                          );
-
-        return rgb.map(x => x.toString(16)).join("");
-    }
-
-
-    // Tạo palette 3-digit nhưng phân bố màu đều hơn
-    function hex3ToRgb(color) {
-        return color.split("").map(x => parseInt(x, 16));
-    }
 
     function createMultiGradientPalette(keyColors, totalCount = 32) {
 
@@ -646,7 +621,7 @@
 
 
         // ==========================================
-        // Đảm bảo đúng 32 màu
+        // Đảm bảo đúng số lượng màu yêu cầu
         // ==========================================
 
         if (result.length > totalCount) {
@@ -784,7 +759,8 @@
         let currentText = '';
         let pendingSpaces = '';
 
-        const styleNames = Object.keys(COLOR_STYLES);
+        const styleNames = Object.keys(COLOR_STYLES)
+        .filter(name => COLOR_STYLES[name]?.length > 0);
 
         const selectedStyle =
               rainbowChatStyle === "random"
@@ -879,6 +855,13 @@
 
                 // Space gắn vào segment trước
                 result += segmentText;
+
+                console.log(
+                    "APPEND:",
+                    JSON.stringify(segmentText),
+                    "RESULT:",
+                    result
+                );
 
                 colorIndex = Math.min(colorIndex + 1, colors.length - 1);
 
@@ -1937,17 +1920,6 @@
             audioControlEnabled = !audioControlEnabled;
 
             audioSwitch.classList.toggle("on", audioControlEnabled);
-
-            document.querySelectorAll("audio, video").forEach(el => {
-                const src = el.src || "";
-
-                if (
-                    src.includes("countdownbeep.mp3") ||
-                    src.includes("next-in-line-chime.mp3")
-                ) {
-                    el.volume = audioControlEnabled ? 0.5 : 0;
-                }
-            });
 
             log(`Audio Control ${audioControlEnabled ? "ON" : "OFF"}`);
         };
