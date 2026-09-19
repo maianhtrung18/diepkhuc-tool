@@ -1506,7 +1506,6 @@
             : message;
             const ok = await fastSend(coloredMessage);
             if (!ok) break;
-            await sleep(5000);
         }
     }
 
@@ -1718,24 +1717,90 @@
         }, true);
 
 
-
         const originalSendChat = window.sendChat;
 
-        window.sendChat = function(message) {
-            if (dkManualChatSending && rainbowChatEnabled) {
-                const rainbowMessage = rainbowEncodeUserChat(message);
+        const botSendQueue = [];
+        let botSendRunning = false;
+        let botLastSendTime = 0;
 
-                console.log(
-                    "🌈 RAINBOW SEND:",
-                    message,
-                    "→",
-                    rainbowMessage
-                );
+        async function processBotSendQueue() {
+            if (botSendRunning) return;
 
-                return originalSendChat.call(this, rainbowMessage);
+            botSendRunning = true;
+
+            while (botSendQueue.length > 0) {
+
+                const item = botSendQueue.shift();
+
+                try {
+
+                    // ⏱️ Đảm bảo tối thiểu 5 giây giữa 2 lần gửi thực tế
+                    const elapsed = Date.now() - botLastSendTime;
+                    const waitTime = Math.max(0, 6000 - elapsed);
+
+                    if (waitTime > 0) {
+                        await sleep(waitTime);
+                    }
+
+                    let message = item.message;
+
+                    // 🌈 Rainbow tại điểm gửi chung
+                    if (rainbowChatEnabled) {
+                        const rainbowMessage = rainbowEncodeUserChat(message);
+
+                        console.log(
+                            "🌈 RAINBOW SEND:",
+                            message,
+                            "→",
+                            rainbowMessage
+                        );
+
+                        message = rainbowMessage;
+                    }
+
+                    console.log(
+                        "📤 CHAT SEND:",
+                        message
+                    );
+
+                    const result = await originalSendChat.call(
+                        item.context,
+                        message
+                    );
+
+                    botLastSendTime = Date.now();
+
+                    item.resolve(result);
+
+                } catch (err) {
+
+                    console.error("❌ Chat send error:", err);
+
+                    item.reject(err);
+                }
             }
 
-            return originalSendChat.call(this, message);
+            botSendRunning = false;
+        }
+
+        window.sendChat = function(message) {
+            if (!message) return;
+
+            return new Promise((resolve, reject) => {
+                botSendQueue.push({
+                    message,
+                    context: this,
+                    resolve,
+                    reject
+                });
+
+                console.log(
+                    `📥 CHAT QUEUE: ${botSendQueue.length}`,
+                    message
+                );
+
+                processBotSendQueue();
+            });
         };
 
         const botBtn = document.createElement("button");
