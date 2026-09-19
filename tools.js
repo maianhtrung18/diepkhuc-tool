@@ -22,6 +22,9 @@
     let autoCommentRunning = false;
     let autoCommentTask = null;
     let autoCommentMessage = "";
+    let autoCommentStyle = "off";
+    let autoCommentMin = 1;
+    let autoCommentMax = 3;
 
     let commentDelayInput = null;
     let commentTimeout = null;
@@ -401,16 +404,98 @@
 
     function getRandomMessage(text) {
         const tokens = text.match(/\[[^\]]+\]/g) || [];
-        if (tokens.length === 0) return "";
 
-        const shuffled = [...tokens];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        // OFF → gửi nguyên văn
+        if (autoCommentStyle === "off") {
+            return text;
         }
 
-        const count = 1 + Math.floor(Math.random() * Math.min(8, shuffled.length));
-        return shuffled.slice(0, count).join("");
+        if (tokens.length === 0) {
+            return "";
+        }
+
+        const min = Math.min(autoCommentMin, autoCommentMax);
+        const max = Math.max(autoCommentMin, autoCommentMax);
+
+        const count =
+              min + Math.floor(
+                  Math.random() * (max - min + 1)
+              );
+
+
+        // ==========================================
+        // RANDOM
+        // Shuffle token → lấy Min đến Max
+        // ==========================================
+
+        if (autoCommentStyle === "random") {
+
+            const shuffled = [...tokens];
+
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+
+                [shuffled[i], shuffled[j]] =
+                    [shuffled[j], shuffled[i]];
+            }
+
+            const actualCount =
+                  Math.min(count, shuffled.length);
+
+            return shuffled
+                .slice(0, actualCount)
+                .join("");
+        }
+
+
+        // ==========================================
+        // SEQUENTIAL
+        // Không shuffle
+        // ==========================================
+
+        if (autoCommentStyle === "sequential") {
+
+            // Tạo index nếu chưa có
+            if (typeof getRandomMessage.sequentialIndex !== "number") {
+                getRandomMessage.sequentialIndex = 0;
+            }
+
+            const result = [];
+
+            for (let i = 0; i < count; i++) {
+
+                result.push(
+                    tokens[
+                        getRandomMessage.sequentialIndex
+                        % tokens.length
+                    ]
+                );
+
+                getRandomMessage.sequentialIndex++;
+            }
+
+            return result.join("");
+        }
+
+
+        // ==========================================
+        // REPEAT
+        // Chọn 1 token → lặp Min đến Max
+        // ==========================================
+
+        if (autoCommentStyle === "repeat") {
+
+            const token =
+                  tokens[
+                      Math.floor(Math.random() * tokens.length)
+                  ];
+
+            return token.repeat(count);
+        }
+
+
+        // Fallback
+        return text;
     }
 
 
@@ -1672,6 +1757,85 @@
         commentDelayInput.style.width = "70px";
         commentDelayInput.style.marginLeft = "5px";
         commentDelayInput.title = "Khoảng cách comment (giây)";
+        const autoCommentStyleSelect = document.createElement("select");
+
+        autoCommentStyleSelect.style.width = "90px";
+        autoCommentStyleSelect.style.marginLeft = "5px";
+
+        autoCommentStyleSelect.innerHTML = `
+    <option value="off">OFF</option>
+    <option value="random">Random</option>
+    <option value="sequential">Sequential</option>
+    <option value="repeat">Repeat</option>
+`;
+
+        autoCommentStyleSelect.value = autoCommentStyle;
+
+
+        const autoCommentMinInput = document.createElement("input");
+
+        autoCommentMinInput.type = "number";
+        autoCommentMinInput.min = "1";
+        autoCommentMinInput.max = "8";
+        autoCommentMinInput.value = autoCommentMin;
+        autoCommentMinInput.style.width = "45px";
+        autoCommentMinInput.title = "Số token tối thiểu";
+
+
+        const autoCommentMaxInput = document.createElement("input");
+
+        autoCommentMaxInput.type = "number";
+        autoCommentMaxInput.min = "1";
+        autoCommentMaxInput.max = "8";
+        autoCommentMaxInput.value = autoCommentMax;
+        autoCommentMaxInput.style.width = "45px";
+        autoCommentMaxInput.title = "Số token tối đa";
+
+
+        autoCommentStyleSelect.onchange = () => {
+            autoCommentStyle = autoCommentStyleSelect.value;
+
+            console.log(
+                "Auto Comment Style:",
+                autoCommentStyle
+            );
+        };
+
+
+        autoCommentMinInput.onchange = () => {
+            autoCommentMin = Math.min(
+                8,
+                Math.max(1, parseInt(autoCommentMinInput.value, 10) || 1)
+            );
+
+            if (autoCommentMin > autoCommentMax) {
+                autoCommentMin = autoCommentMax;
+                autoCommentMinInput.value = autoCommentMin;
+            }
+
+            console.log(
+                "Auto Comment Min:",
+                autoCommentMin
+            );
+        };
+
+
+        autoCommentMaxInput.onchange = () => {
+            autoCommentMax = Math.min(
+                8,
+                Math.max(1, parseInt(autoCommentMaxInput.value, 10) || 1)
+            );
+
+            if (autoCommentMax < autoCommentMin) {
+                autoCommentMax = autoCommentMin;
+                autoCommentMaxInput.value = autoCommentMax;
+            }
+
+            console.log(
+                "Auto Comment Max:",
+                autoCommentMax
+            );
+        };
 
         const toolboxContent = document.getElementById("toolbox-content");
 
@@ -1691,8 +1855,17 @@
             row2.appendChild(autoCommentBtn);
             row2.appendChild(commentDelayInput);
 
+
+            const row2Style = document.createElement("div");
+            row2Style.className = "toolbox-row";
+
+            row2Style.appendChild(autoCommentStyleSelect);
+            row2Style.appendChild(autoCommentMinInput);
+            row2Style.appendChild(autoCommentMaxInput);
+
             toolboxContent.appendChild(row1);
             toolboxContent.appendChild(row2);
+            toolboxContent.appendChild(row2Style);
 
             const rainbowRow = document.createElement("div");
             rainbowRow.className = "toolbox-row";
