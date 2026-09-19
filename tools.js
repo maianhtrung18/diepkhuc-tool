@@ -885,7 +885,7 @@
                     const segmentText = currentText + pendingSpaces;
 
                     const segmentWidth = ctx.measureText(
-                        currentText.replace(/ /g, '')
+                        currentText.replace(/ /g, '').replace(/\[[^\]]*\]/g, '')
                     ).width;
 
                     console.log(
@@ -1054,6 +1054,183 @@
     function getRoomItems() {
         return [...document.querySelectorAll(".user-list .item")];
     }
+
+    // ===============================
+    // NEW USER GREETING
+    // ===============================
+
+    let previousRoomUsers = new Set();
+    let newUserGreetingReady = false;
+    let newUserGreetingTimer = null;
+    let newUserGreetingEnabled = false;
+
+    // Queue Welcome New Member
+    let newUserGreetingQueue = [];
+    let newUserGreetingQueueTimer = null;
+    let newUserGreetingRunning = false;
+
+    // Câu chào — muốn đổi chỉ sửa dòng này
+    const NEW_USER_GREETING_PREFIX = "hi";
+
+
+    function getCurrentRoomUsers() {
+        return new Set(
+            getRoomItems()
+            .map(item => item.querySelector(".nick")?.innerText.trim())
+            .filter(Boolean)
+        );
+    }
+
+
+    async function checkNewRoomUsers() {
+
+        const currentUsers = getCurrentRoomUsers();
+
+        // Lần đầu: chỉ ghi nhận người đang có trong room
+        if (!newUserGreetingReady) {
+            previousRoomUsers = currentUsers;
+            newUserGreetingReady = true;
+            return;
+        }
+
+        // OFF → vẫn cập nhật danh sách user, nhưng không chào
+        if (!newUserGreetingEnabled) {
+            previousRoomUsers = currentUsers;
+            return;
+        }
+
+        // Tìm user mới
+        const newUsers = [...currentUsers].filter(
+            nick => !previousRoomUsers.has(nick)
+        );
+
+        previousRoomUsers = currentUsers;
+
+        if (newUsers.length === 0) {
+            return;
+        }
+
+        // User mới → push vào queue
+        for (const nick of newUsers) {
+
+            if (!newUserGreetingQueue.includes(nick)) {
+                newUserGreetingQueue.push(nick);
+            }
+        }
+
+        console.log(
+            "👋 New User Greeting Queue:",
+            [...newUserGreetingQueue]
+        );
+
+        // Đang xử lý queue → chỉ push, không tạo thêm process
+        if (newUserGreetingRunning) {
+            return;
+        }
+
+        // Queue có user → bắt đầu đợi 5 giây
+        if (!newUserGreetingQueueTimer) {
+
+            newUserGreetingQueueTimer = setTimeout(
+                processNewUserGreetingQueue,
+                5000
+            );
+        }
+    }
+
+
+    async function processNewUserGreetingQueue() {
+
+        newUserGreetingQueueTimer = null;
+
+        if (
+            !newUserGreetingEnabled ||
+            newUserGreetingQueue.length === 0
+        ) {
+            newUserGreetingRunning = false;
+            return;
+        }
+
+        newUserGreetingRunning = true;
+
+        // Lấy snapshot queue hiện tại
+        const users = [...newUserGreetingQueue];
+
+        // Đặt prefix cho sendGreeting()
+        const oldPrefix = chatTextarea?.value || "";
+
+        if (chatTextarea) {
+            chatTextarea.value = NEW_USER_GREETING_PREFIX;
+            chatTextarea.dispatchEvent(
+                new Event("input", { bubbles: true })
+            );
+        }
+
+        // sendGreeting() tự xử lý:
+        // - ≤155 ký tự
+        // - chia message
+        // - 5 giây giữa các message
+        await sendGreeting(users);
+
+        // Khôi phục textarea
+        if (chatTextarea) {
+            chatTextarea.value = oldPrefix;
+            chatTextarea.dispatchEvent(
+                new Event("input", { bubbles: true })
+            );
+        }
+
+        // Remove đúng batch vừa xử lý
+        newUserGreetingQueue.splice(0, users.length);
+
+        // Nếu trong lúc send có user mới vào
+        // thì queue sẽ còn user
+        if (
+            newUserGreetingEnabled &&
+            newUserGreetingQueue.length > 0
+        ) {
+
+            newUserGreetingQueueTimer = setTimeout(
+                processNewUserGreetingQueue,
+                5000
+            );
+
+        } else {
+
+            newUserGreetingRunning = false;
+        }
+    }
+
+
+    function initNewUserGreeting() {
+
+        const userList = document.querySelector(".user-list");
+
+        if (!userList) {
+            console.warn("⚠️ Không tìm thấy .user-list");
+            return;
+        }
+
+        // Ghi nhận danh sách ban đầu
+        checkNewRoomUsers();
+
+        const observer = new MutationObserver(() => {
+
+            clearTimeout(newUserGreetingTimer);
+
+            newUserGreetingTimer = setTimeout(() => {
+                checkNewRoomUsers();
+            }, 150);
+        });
+
+        observer.observe(userList, {
+            childList: true,
+            subtree: true
+        });
+
+        console.log("👋 New User Greeting ready");
+    }
+
 
     function getMicUsers() {
 
@@ -1727,6 +1904,27 @@
             }
         };
 
+        const newUserGreetingBtn = document.createElement("button");
+        newUserGreetingBtn.type = "button";
+        newUserGreetingBtn.className = "audio-switch";
+
+        newUserGreetingBtn.onclick = () => {
+            newUserGreetingEnabled = !newUserGreetingEnabled;
+
+            newUserGreetingBtn.classList.toggle(
+                "on",
+                newUserGreetingEnabled
+            );
+
+            console.log(
+                "New User Greeting:",
+                newUserGreetingEnabled ? "ON" : "OFF"
+            );
+        };
+
+        // Mặc định OFF
+        newUserGreetingBtn.classList.remove("on");
+
         const autoCommentBtn = document.createElement("button");
         autoCommentBtn.type = "button";
         autoCommentBtn.className = "btn btn-warning";
@@ -1862,6 +2060,7 @@
             row1.appendChild(autoMicLabel);
             row1.appendChild(btn);
 
+
             // Hàng 2: Auto Cmt + textbox
             const row2 = document.createElement("div");
             row2.className = "toolbox-row";
@@ -1880,6 +2079,7 @@
             toolboxContent.appendChild(row1);
             toolboxContent.appendChild(row2);
             toolboxContent.appendChild(row2Style);
+
 
             const rainbowRow = document.createElement("div");
             rainbowRow.className = "toolbox-row";
@@ -2116,6 +2316,18 @@
 
         toolboxContent.appendChild(audioRow);
 
+        const greetingRow = document.createElement("div");
+        greetingRow.className = "toolbox-row";
+
+        const greetingLabel = document.createElement("label");
+        greetingLabel.innerText = "Welcome new member";
+        greetingLabel.style.color = "white";
+
+        greetingRow.appendChild(greetingLabel);
+        greetingRow.appendChild(newUserGreetingBtn);
+
+        toolboxContent.appendChild(greetingRow);
+
 
         const toolbar = document.createElement("div");
         toolbar.id = "mic-queue-pro-toolbar";
@@ -2124,6 +2336,10 @@
         toolbar.style.gap = "5px";
 
         target.parentElement?.before(toolbar);
+
+
+
+
         $(".volume-controls .ui-slider").slider("value", 0);
     }
 
@@ -2134,6 +2350,7 @@
     async function init() {
         try {
             await createUI();
+            initNewUserGreeting();
         } catch (err) {
             console.error(err);
             setTimeout(init, 2000);
