@@ -861,7 +861,21 @@
         let colorIndex = 0;
         let currentColor = null;
 
-        for (const char of text) {
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+
+            // Icon [...] = một block nguyên vẹn, giống như space
+            const iconMatch = text.slice(i).match(/^\[[^\]]*\]/);
+
+            if (iconMatch) {
+                const icon = iconMatch[0];
+
+                currentText += pendingSpaces + icon;
+                pendingSpaces = '';
+
+                i += icon.length - 1;
+                continue;
+            }
 
             if (char === '\n') {
 
