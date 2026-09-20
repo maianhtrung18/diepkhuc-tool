@@ -983,16 +983,19 @@
             setTimeout(createWorkspaceCombobox, 1000);
             return;
         }
-
+        target.parentElement.style.overflow = "hidden";
         const panel = document.createElement("div");
 
         panel.id = "dk-workspace-panel";
 
         panel.style.cssText = `
-        width: 180px;
-        margin-bottom: 5px;
+        width: 100%;
+        min-width: 450px;
         box-sizing: border-box;
         font-size: 14px;
+        display: flex;
+
+
     `;
 
         // =========================================================
@@ -1032,9 +1035,9 @@
         const actionArea = document.createElement("div");
 
         actionArea.style.cssText = `
-        margin-top: 5px;
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
+        width: 100%;
         gap: 5px;
     `;
 
