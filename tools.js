@@ -800,6 +800,26 @@
         text = text.trim();
         // Xóa các mã màu cũ nếu text đã được rainbow encode
         text = text.replace(/\[[0-9a-fA-F]{3}\]/g, '');
+        // 🌈 RAINBOW OFF → dùng màu chat mặc định của trang
+        if (!rainbowChatEnabled) {
+            const colorInput = document.querySelector(
+                'input[type="color"]:not(#my-dkhd-toolbox input[type="color"])'
+            );
+
+            if (colorInput?.value) {
+                const hex = colorInput.value.replace("#", "");
+
+                const color3 =
+                      hex[0] +
+                      hex[2] +
+                      hex[4];
+
+                return `[${color3}]${text}`;
+            }
+            console.debug("Trung", text)
+            return text;
+        }
+
 
         // Canvas để đo độ rộng text
         const canvas = document.createElement('canvas');
@@ -1795,18 +1815,18 @@
                     let message = item.message;
 
                     // 🌈 Rainbow tại điểm gửi chung
-                    if (rainbowChatEnabled) {
-                        const rainbowMessage = rainbowEncodeUserChat(message);
+                    const rainbowMessage = rainbowEncodeUserChat(message);
 
-                        console.log(
-                            "🌈 RAINBOW SEND:",
-                            message,
-                            "→",
-                            rainbowMessage
-                        );
+                    console.log(
+                        rainbowChatEnabled
+                        ? "🌈 RAINBOW SEND:"
+                        : "🎨 DEFAULT COLOR SEND:",
+                        message,
+                        "→",
+                        rainbowMessage
+                    );
 
-                        message = rainbowMessage;
-                    }
+                    message = rainbowMessage;
 
                     console.log(
                         "📤 CHAT SEND:",
