@@ -69,7 +69,7 @@
             src.includes("caro-1.mp3") ||
             src.includes("caro-2.mp3")
         ) {
-            this.volume = audioControlEnabled ? 0.5 : 0;
+            this.volume = audioControlEnabled ? 0.2 : 0;
         }
 
         return originalPlay.apply(this, arguments);
@@ -1035,19 +1035,83 @@
     }
 
 
+    // ==================== PUBLIC CHAT QUEUE ====================
 
+    const botSendQueue = [];
+    let botSendRunning = false;
 
+    async function processBotSendQueue() {
+        if (botSendRunning) return;
+
+        botSendRunning = true;
+
+        while (botSendQueue.length > 0) {
+            const item = botSendQueue[0]; // KHÔNG shift ở đây
+
+            try {
+                const sendMessage = rainbowEncodeUserChat(item.message);
+
+                console.log("📤 PUBLIC CHAT SEND:", sendMessage);
+
+                const result = await chat.rpc("chatMessage", [
+                    sendMessage
+                ]);
+
+                // Server đang bắt spam → giữ nguyên item để retry
+                if (result?.errorCode === "SPAMMING") {
+                    console.warn("⏳ PUBLIC SPAMMING → retry...");
+                    await sleep(5000);
+                    continue;
+                }
+
+                // Gửi xong mới lấy khỏi queue
+                botSendQueue.shift();
+
+                if (result?.errorCode) {
+                    console.warn(
+                        "❌ PUBLIC CHAT ERROR:",
+                        result.errorCode,
+                        result
+                    );
+
+                    item.resolve(false);
+                    continue;
+                }
+
+                console.log("✅ PUBLIC CHAT SENT:", sendMessage);
+
+                item.resolve(true);
+
+            } catch (err) {
+                botSendQueue.shift();
+
+                console.error("❌ Public chat error:", err);
+
+                item.resolve(false);
+            }
+        }
+
+        botSendRunning = false;
+    }
     async function fastSend(message) {
         if (!message) return false;
 
-        try {
-            await window.sendChat(message);
-            return true;
-        } catch (err) {
-            console.error("[BOT] Send chat error:", err);
-            return false;
-        }
+        return new Promise((resolve, reject) => {
+            botSendQueue.push({
+                message,
+                resolve,
+                reject
+            });
+
+            console.log(
+                `📥 PUBLIC QUEUE: ${botSendQueue.length}`,
+                message
+            );
+
+            processBotSendQueue();
+        });
     }
+
 
     async function waitForElement(selector, timeout = 5000) {
         const start = Date.now();
@@ -1561,8 +1625,8 @@
         }
 
         // --------------------------------------------------
-        // Đẩy text SẠCH vào common queue
-        // Rainbow sẽ được thêm ở window.sendChat()
+        // Đẩy text SẠCH vào fastSend()
+        // Rainbow + default color sẽ được xử lý ở send layer
         // --------------------------------------------------
         for (const message of messages) {
 
@@ -1578,6 +1642,8 @@
             if (!ok) break;
         }
     }
+
+
     //////////////////////////////////////////////////////
     // RECORD
     //////////////////////////////////////////////////////
@@ -1786,95 +1852,7 @@
         }, true);
 
 
-        const originalSendChat = window.sendChat;
 
-        const botSendQueue = [];
-        let botSendRunning = false;
-        let botLastSendTime = 0;
-
-        async function processBotSendQueue() {
-            if (botSendRunning) return;
-
-            botSendRunning = true;
-
-            while (botSendQueue.length > 0) {
-
-                const item = botSendQueue.shift();
-
-
-                try {
-
-                    // ⏱️ Đảm bảo tối thiểu 5 giây giữa 2 lần gửi thực tế
-                    const elapsed = Date.now() - botLastSendTime;
-                    const waitTime = Math.max(0, 6000 - elapsed);
-
-                    if (waitTime > 0) {
-                        await sleep(waitTime);
-                    }
-
-                    let message = item.message;
-
-                    // 🌈 Rainbow tại điểm gửi chung
-                    const rainbowMessage = rainbowEncodeUserChat(message);
-
-                    console.log(
-                        rainbowChatEnabled
-                        ? "🌈 RAINBOW SEND:"
-                        : "🎨 DEFAULT COLOR SEND:",
-                        message,
-                        "→",
-                        rainbowMessage
-                    );
-
-                    message = rainbowMessage;
-
-                    console.log(
-                        "📤 CHAT SEND:",
-                        message
-                    );
-
-                    const result = await originalSendChat.call(
-                        item.context,
-                        message
-                    );
-
-                    botLastSendTime = Date.now();
-                    console.log(
-                        `📊 QUEUE LENGTH: ${botSendQueue.length}`
-                    );
-
-                    item.resolve(result);
-
-                } catch (err) {
-
-                    console.error("❌ Chat send error:", err);
-
-                    item.reject(err);
-                }
-            }
-
-            botSendRunning = false;
-        }
-
-        window.sendChat = function(message) {
-            if (!message) return;
-
-            return new Promise((resolve, reject) => {
-                botSendQueue.push({
-                    message,
-                    context: this,
-                    resolve,
-                    reject
-                });
-
-                processBotSendQueue();
-                console.log(
-                    `📊 QUEUE LENGTH: ${botSendQueue.length}`,
-                    message
-                );
-
-            });
-        };
 
         const botBtn = document.createElement("button");
         botBtn.type = "button";
