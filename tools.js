@@ -1467,48 +1467,97 @@
             return;
         }
 
+        // Giới hạn thực tế của message sau khi thêm mã màu
         const MAX_LENGTH = 155;
+
         const prefix = (chatTextarea?.value || "").trim() || "hi";
+
         chatTextarea.value = "";
-        chatTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+        chatTextarea.dispatchEvent(
+            new Event("input", { bubbles: true })
+        );
 
         const messages = [];
         let current = "";
 
+        // --------------------------------------------------
+        // Kiểm tra độ dài THỰC TẾ sau khi Rainbow encode
+        // --------------------------------------------------
+        function getSendLength(text) {
+            if (!rainbowChatEnabled) {
+                return text.length;
+            }
+
+            const encoded = rainbowEncodeUserChat(text);
+
+            return encoded.length;
+        }
+
         for (const user of users) {
+
             const text = prefix.includes("@")
             ? prefix.replace(/@/g, user)
             : `${prefix} ${user}`;
 
-            if (text.length > MAX_LENGTH) {
-                alert("Nội dung quá dài!");
+            // Kiểm tra riêng nickname này
+            const singleLength = getSendLength(text);
+
+            if (singleLength > MAX_LENGTH) {
+                alert(`Nội dung quá dài: ${text}`);
                 return;
             }
 
+            // Message đầu tiên
             if (current === "") {
                 current = text;
-            } else if ((current + ", " + text).length <= MAX_LENGTH) {
-                current += ", " + text;
+                continue;
+            }
+
+            // Thử thêm nickname vào message hiện tại
+            const candidate = current + ", " + text;
+
+            // Quan trọng:
+            // candidate vẫn là text sạch, chưa có mã màu.
+            // Rainbow chỉ được encode để PREVIEW độ dài.
+            const candidateLength = getSendLength(candidate);
+
+            if (candidateLength <= MAX_LENGTH) {
+
+                // Vẫn đủ chỗ → nhận nickname
+                current = candidate;
+
             } else {
+
+                // Vượt 155 → chốt message hiện tại
                 messages.push(current);
+
+                // Nickname này chuyển sang message kế
                 current = text;
             }
         }
 
-        if (current) messages.push(current);
+        if (current) {
+            messages.push(current);
+        }
 
+        // --------------------------------------------------
+        // Đẩy text SẠCH vào common queue
+        // Rainbow sẽ được thêm ở window.sendChat()
+        // --------------------------------------------------
         for (const message of messages) {
-            const colorInput = document.querySelector('input[type="color"]');
-            const color = colorInput?.value?.replace("#", "");
 
-            const coloredMessage = color
-            ? `[${color[0]}${color[2]}${color[4]}]${message}`
-            : message;
-            const ok = await fastSend(coloredMessage);
+            console.log(
+                "👋 GREETING QUEUE:",
+                message,
+                "length:",
+                message.length
+            );
+
+            const ok = await fastSend(message);
+
             if (!ok) break;
         }
     }
-
     //////////////////////////////////////////////////////
     // RECORD
     //////////////////////////////////////////////////////
@@ -1732,6 +1781,7 @@
 
                 const item = botSendQueue.shift();
 
+
                 try {
 
                     // ⏱️ Đảm bảo tối thiểu 5 giây giữa 2 lần gửi thực tế
@@ -1769,6 +1819,9 @@
                     );
 
                     botLastSendTime = Date.now();
+                    console.log(
+                        `📊 QUEUE LENGTH: ${botSendQueue.length}`
+                    );
 
                     item.resolve(result);
 
@@ -1794,12 +1847,12 @@
                     reject
                 });
 
+                processBotSendQueue();
                 console.log(
-                    `📥 CHAT QUEUE: ${botSendQueue.length}`,
+                    `📊 QUEUE LENGTH: ${botSendQueue.length}`,
                     message
                 );
 
-                processBotSendQueue();
             });
         };
 
