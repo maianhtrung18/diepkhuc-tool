@@ -1468,7 +1468,7 @@
         }
 
         // Giới hạn thực tế của message sau khi thêm mã màu
-        const MAX_LENGTH = 155;
+        const MAX_LENGTH = 160;
 
         const prefix = (chatTextarea?.value || "").trim() || "hi";
 
