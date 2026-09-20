@@ -1828,27 +1828,118 @@
         sendButton = chatForm.querySelector('button[type="submit"]');
         chatTextarea = document.querySelector('textarea[name="message"]');
 
+        // ============================================================
+        // MANUAL CHAT
+        // Public  -> Rainbow -> Public Queue
+        // Private -> Rainbow -> Private RPC
+        // ============================================================
 
-        chatForm.addEventListener("submit", () => {
-            dkManualChatSending = true;
+        chatForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            e.stopImmediatePropagation();
 
-            console.log("🌈 MANUAL SUBMIT");
+            const message = chatTextarea?.value?.trim();
 
-            setTimeout(() => {
-                dkManualChatSending = false;
-            }, 100);
-        }, true);
-
-        chatTextarea.addEventListener("keydown", (e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-                dkManualChatSending = true;
-
-                console.log("🌈 MANUAL ENTER");
-
-                setTimeout(() => {
-                    dkManualChatSending = false;
-                }, 100);
+            if (!message) {
+                return;
             }
+
+            const selectedTab = window.chatWindow?.selectedTab ?? 0;
+
+            console.log("🌈 MANUAL SEND", {
+                message,
+                selectedTab
+            });
+
+            // ========================================================
+            // PUBLIC
+            // ========================================================
+            if (selectedTab === 0) {
+
+                console.log("🌐 MANUAL PUBLIC");
+
+                const success = await fastSend(message);
+
+                if (success) {
+                    chatTextarea.value = "";
+
+                    // báo cho UI/framework biết textarea đã thay đổi
+                    chatTextarea.dispatchEvent(
+                        new Event("input", { bubbles: true })
+                    );
+                }
+
+                return;
+            }
+
+            // ========================================================
+            // PRIVATE
+            // ========================================================
+
+            const tab = window.chatWindow?.tabs?.[selectedTab];
+
+            if (!tab?.userInfo?.userId) {
+                console.warn("❌ MANUAL PRIVATE: Không tìm thấy userId");
+                return;
+            }
+
+            const userId = String(tab.userInfo.userId);
+
+            // Rainbow encode cho private
+            const encodedMessage = rainbowEncodeUserChat(message);
+
+            console.log("🔒 MANUAL PRIVATE SEND:", {
+                userId,
+                message,
+                encodedMessage
+            });
+
+            try {
+
+                const result = await chat.rpc(
+                    "privateMessage",
+                    [
+                        userId,
+                        encodedMessage
+                    ]
+                );
+
+                if (result?.errorCode) {
+
+                    console.warn(
+                        "❌ MANUAL PRIVATE ERROR:",
+                        result.errorCode,
+                        result
+                    );
+
+                    return;
+                }
+
+                // Direct RPC không tự append vào chatLog
+                tab.appendChatLog({
+                    userInfo: me,
+                    message: encodedMessage
+                });
+
+                chatTextarea.value = "";
+
+                chatTextarea.dispatchEvent(
+                    new Event("input", { bubbles: true })
+                );
+
+                console.log(
+                    "✅ MANUAL PRIVATE SENT:",
+                    encodedMessage
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "❌ MANUAL PRIVATE RPC ERROR:",
+                    error
+                );
+            }
+
         }, true);
 
 
