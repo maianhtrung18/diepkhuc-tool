@@ -2009,7 +2009,8 @@
         }, true);
 
         chatTextarea.addEventListener("keydown", (e) => {
-            if (e.key !== "Enter" || e.shiftKey) return;
+            if (e.key !== "Enter" || e.keyCode !== 13 || e.shiftKey) return;
+
 
             e.preventDefault();
             e.stopImmediatePropagation();
