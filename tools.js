@@ -1060,7 +1060,7 @@
                 // Server đang bắt spam → giữ nguyên item để retry
                 if (result?.errorCode === "SPAMMING") {
                     console.warn("⏳ PUBLIC SPAMMING → retry...");
-                    await sleep(2000);
+                    await sleep(1000);
                     continue;
                 }
 
@@ -1148,7 +1148,7 @@
                         "⏳ MANUAL PUBLIC SPAMMING → retry..."
                     );
 
-                    await delay(2000);
+                    await delay(1000);
                     continue;
                 }
 
@@ -1176,7 +1176,7 @@
 
                 // Cho message tiếp theo đi từ từ
                 if (manualSendQueue.length > 0) {
-                    await delay(2000);
+                    await delay(1000);
                 }
 
             } catch (err) {
@@ -1321,7 +1321,7 @@
 
             newUserGreetingQueueTimer = setTimeout(
                 processNewUserGreetingQueue,
-                5000
+                1000
             );
         }
     }
@@ -1365,7 +1365,7 @@
 
             newUserGreetingQueueTimer = setTimeout(
                 processNewUserGreetingQueue,
-                5000
+                1000
             );
 
         } else {
