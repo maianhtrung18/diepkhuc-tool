@@ -1053,14 +1053,14 @@
 
                 console.log("📤 PUBLIC CHAT SEND:", sendMessage);
 
-                const result = await chat.rpc("chatMessage", [
+                const result = await window.chat.rpc("chatMessage", [
                     sendMessage
                 ]);
 
                 // Server đang bắt spam → giữ nguyên item để retry
                 if (result?.errorCode === "SPAMMING") {
                     console.warn("⏳ PUBLIC SPAMMING → retry...");
-                    await sleep(5000);
+                    await sleep(2000);
                     continue;
                 }
 
@@ -1111,7 +1111,111 @@
             processBotSendQueue();
         });
     }
+    // ==================== MANUAL PUBLIC CHAT QUEUE ====================
 
+    const manualSendQueue = [];
+    let manualSendRunning = false;
+
+    async function processManualSendQueue() {
+        if (manualSendRunning) return;
+
+        manualSendRunning = true;
+
+        while (manualSendQueue.length > 0) {
+
+            const item = manualSendQueue[0];
+
+            try {
+
+                // Rainbow chỉ encode ngay trước khi gửi
+                const sendMessage = rainbowEncodeUserChat(item.message);
+
+                console.log(
+                    "📤 MANUAL PUBLIC SEND:",
+                    sendMessage
+                );
+
+                const result = await window.chat.rpc(
+                    "chatMessage",
+                    [sendMessage]
+                );
+
+                // Server đang bắt spam
+                // → KHÔNG shift → giữ nguyên message để retry
+                if (result?.errorCode === "SPAMMING") {
+
+                    console.warn(
+                        "⏳ MANUAL PUBLIC SPAMMING → retry..."
+                    );
+
+                    await delay(2000);
+                    continue;
+                }
+
+                // Gửi xong mới lấy khỏi queue
+                manualSendQueue.shift();
+
+                if (result?.errorCode) {
+
+                    console.warn(
+                        "❌ MANUAL PUBLIC ERROR:",
+                        result.errorCode,
+                        result
+                    );
+
+                    item.resolve(false);
+                    continue;
+                }
+
+                console.log(
+                    "✅ MANUAL PUBLIC SENT:",
+                    sendMessage
+                );
+
+                item.resolve(true);
+
+                // Cho message tiếp theo đi từ từ
+                if (manualSendQueue.length > 0) {
+                    await delay(2000);
+                }
+
+            } catch (err) {
+
+                manualSendQueue.shift();
+
+                console.error(
+                    "❌ MANUAL PUBLIC ERROR:",
+                    err
+                );
+
+                item.resolve(false);
+            }
+        }
+
+        manualSendRunning = false;
+    }
+
+
+    function manualPublicSend(message) {
+
+        if (!message) return false;
+
+        return new Promise((resolve, reject) => {
+
+            manualSendQueue.push({
+                message,
+                resolve,
+                reject
+            });
+
+            console.log(
+                `📥 MANUAL PUBLIC QUEUE: ${manualSendQueue.length}`,
+                message
+            );
+
+            processManualSendQueue();
+        });
+    }
 
     async function waitForElement(selector, timeout = 5000) {
         const start = Date.now();
@@ -1240,29 +1344,14 @@
         // Lấy snapshot queue hiện tại
         const users = [...newUserGreetingQueue];
 
-        // Đặt prefix cho sendGreeting()
-        const oldPrefix = chatTextarea?.value || "";
-
-        if (chatTextarea) {
-            chatTextarea.value = NEW_USER_GREETING_PREFIX;
-            chatTextarea.dispatchEvent(
-                new Event("input", { bubbles: true })
-            );
-        }
 
         // sendGreeting() tự xử lý:
         // - ≤155 ký tự
         // - chia message
         // - 5 giây giữa các message
-        await sendGreeting(users);
-
-        // Khôi phục textarea
-        if (chatTextarea) {
-            chatTextarea.value = oldPrefix;
-            chatTextarea.dispatchEvent(
-                new Event("input", { bubbles: true })
-            );
-        }
+        // New Member Greeting dùng prefix riêng
+        // Không đọc / không sửa textarea
+        await sendGreeting(users, NEW_USER_GREETING_PREFIX);
 
         // Remove đúng batch vừa xử lý
         newUserGreetingQueue.splice(0, users.length);
@@ -1545,7 +1634,7 @@
     // GREETING
     //////////////////////////////////////////////////////
 
-    async function sendGreeting(users) {
+    async function sendGreeting(users, greetingPrefix = null) {
         if (users.length === 0) {
             alert("Không tìm thấy user");
             return;
@@ -1554,12 +1643,10 @@
         // Giới hạn thực tế của message sau khi thêm mã màu
         const MAX_LENGTH = 160;
 
-        const prefix = (chatTextarea?.value || "").trim() || "hi";
-
-        chatTextarea.value = "";
-        chatTextarea.dispatchEvent(
-            new Event("input", { bubbles: true })
-        );
+        const prefix =
+              greetingPrefix !== null
+        ? greetingPrefix.trim() || "hi"
+        : (chatTextarea?.value || "").trim() || "hi";
 
         const messages = [];
         let current = "";
@@ -1833,16 +1920,9 @@
         // Public  -> Rainbow -> Public Queue
         // Private -> Rainbow -> Private RPC
         // ============================================================
-
-        chatForm.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-
+        async function handleManualSend() {
             const message = chatTextarea?.value?.trim();
-
-            if (!message) {
-                return;
-            }
+            if (!message) return;
 
             const selectedTab = window.chatWindow?.selectedTab ?? 0;
 
@@ -1851,31 +1931,23 @@
                 selectedTab
             });
 
-            // ========================================================
             // PUBLIC
-            // ========================================================
             if (selectedTab === 0) {
-
                 console.log("🌐 MANUAL PUBLIC");
 
-                const success = await fastSend(message);
+                // Vào queue ngay, không chờ gửi xong
+                manualPublicSend(message);
 
-                if (success) {
-                    chatTextarea.value = "";
-
-                    // báo cho UI/framework biết textarea đã thay đổi
-                    chatTextarea.dispatchEvent(
-                        new Event("input", { bubbles: true })
-                    );
-                }
+                // Xóa ô nhập ngay
+                chatTextarea.value = "";
+                chatTextarea.dispatchEvent(
+                    new Event("input", { bubbles: true })
+                );
 
                 return;
             }
 
-            // ========================================================
             // PRIVATE
-            // ========================================================
-
             const tab = window.chatWindow?.tabs?.[selectedTab];
 
             if (!tab?.userInfo?.userId) {
@@ -1884,8 +1956,6 @@
             }
 
             const userId = String(tab.userInfo.userId);
-
-            // Rainbow encode cho private
             const encodedMessage = rainbowEncodeUserChat(message);
 
             console.log("🔒 MANUAL PRIVATE SEND:", {
@@ -1895,34 +1965,26 @@
             });
 
             try {
-
-                const result = await chat.rpc(
+                const result = await window.chat.rpc(
                     "privateMessage",
-                    [
-                        userId,
-                        encodedMessage
-                    ]
+                    [userId, encodedMessage]
                 );
 
                 if (result?.errorCode) {
-
                     console.warn(
                         "❌ MANUAL PRIVATE ERROR:",
                         result.errorCode,
                         result
                     );
-
                     return;
                 }
 
-                // Direct RPC không tự append vào chatLog
                 tab.appendChatLog({
-                    userInfo: me,
+                    userInfo: window.me,
                     message: encodedMessage
                 });
 
                 chatTextarea.value = "";
-
                 chatTextarea.dispatchEvent(
                     new Event("input", { bubbles: true })
                 );
@@ -1933,16 +1995,29 @@
                 );
 
             } catch (error) {
-
                 console.error(
                     "❌ MANUAL PRIVATE RPC ERROR:",
                     error
                 );
             }
+        }
+        chatForm.addEventListener("submit", (e) => {
+            e.preventDefault();
+            e.stopImmediatePropagation();
 
+            handleManualSend();
         }, true);
 
+        chatTextarea.addEventListener("keydown", (e) => {
+            if (e.key !== "Enter" || e.shiftKey) return;
 
+            e.preventDefault();
+            e.stopImmediatePropagation();
+
+            console.log("⌨️ MANUAL ENTER");
+
+            handleManualSend();
+        }, true);
 
 
         const botBtn = document.createElement("button");
