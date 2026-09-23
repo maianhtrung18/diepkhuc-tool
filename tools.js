@@ -793,7 +793,218 @@
 
     };
 
+    //////////////////////////////////////////////////////
+    // ✨ FANCY TEXT
+    //////////////////////////////////////////////////////
 
+    const FANCY_TEXT_STYLES = {
+
+        // ==================================================
+        // BOLD
+        // ==================================================
+        bold: {
+            name: "𝐁𝐨𝐥𝐝",
+            upper: "𝐀𝐁𝐂𝐃𝐄𝐅𝐆𝐇𝐈𝐉𝐊𝐋𝐌𝐍𝐎𝐏𝐐𝐑𝐒𝐓𝐔𝐕𝐖𝐗𝐘𝐙",
+            lower: "𝐚𝐛𝐜𝐝𝐞𝐟𝐠𝐡𝐢𝐣𝐤𝐥𝐦𝐧𝐨𝐩𝐪𝐫𝐬𝐭𝐮𝐯𝐰𝐱𝐲𝐳",
+            digits: "𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗"
+        },
+
+        // ==================================================
+        // ITALIC
+        // ==================================================
+        italic: {
+            name: "𝘐𝘵𝘢𝘭𝘪𝘤",
+            upper: "𝘈𝘉𝘊𝘋𝘌𝘍𝘎𝘏𝘐𝘑𝘒𝘓𝘔𝘕𝘖𝘗𝘘𝘙𝘚𝘛𝘜𝘝𝘞𝘟𝘠𝘡",
+            lower: "𝘢𝘣𝘤𝘥𝘦𝘧𝘨𝘩𝘪𝘫𝘬𝘭𝘮𝘯𝘰𝘱𝘲𝘳𝘴𝘵𝘶𝘷𝘸𝘹𝘺𝘻",
+            digits: null
+        },
+
+        // ==================================================
+        // BOLD ITALIC
+        // ==================================================
+        boldItalic: {
+            name: "𝑩𝒐𝒍𝒅 𝑰𝒕𝒂𝒍𝒊𝒄",
+            upper: "𝑨𝑩𝑪𝑫𝑬𝑭𝑮𝑯𝑰𝑱𝑲𝑳𝑴𝑵𝑶𝑷𝑸𝑹𝑺𝑻𝑼𝑽𝑾𝑿𝒀𝒁",
+            lower: "𝒂𝒃𝒄𝒅𝒆𝒇𝒈𝒉𝒊𝒋𝒌𝒍𝒎𝒏𝒐𝒑𝒒𝒓𝒔𝒕𝒖𝒗𝒘𝒙𝒚𝒛",
+            digits: "𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗"
+        },
+
+        // ==================================================
+        // SCRIPT
+        // ==================================================
+        script: {
+            name: "𝓢𝓬𝓻𝓲𝓹𝓽",
+            upper: "𝒜𝐵𝒞𝒟ℰℱ𝒢ℋℐ𝒥𝒦ℒℳ𝒩𝒪𝒫𝒬ℛ𝒮𝒯𝒰𝒱𝒲𝒳𝒴𝒵",
+            lower: "𝒶𝒷𝒸𝒹ℯ𝒻ℊ𝒽𝒾𝒿𝓀𝓁𝓂𝓃ℴ𝓅𝓆𝓇𝓈𝓉𝓊𝓋𝓌𝓍𝓎𝓏",
+            digits: null
+        },
+
+        // ==================================================
+        // BOLD SCRIPT
+        // ==================================================
+        boldScript: {
+            name: "𝓑𝓸𝓵𝓭 𝓢𝓬𝓻𝓲𝓹𝓽",
+            upper: "𝓐𝓑𝓒𝓓𝓔𝓕𝓖𝓗𝓘𝓙𝓚𝓛𝓜𝓝𝓞𝓟𝓠𝓡𝓢𝓣𝓤𝓥𝓦𝓧𝓨𝓩",
+            lower: "𝓪𝓫𝓬𝓭𝓮𝓯𝓰𝓱𝓲𝓳𝓴𝓵𝓶𝓷𝓸𝓹𝓺𝓻𝓼𝓽𝓾𝓿𝔀𝔁𝔂𝔃",
+            digits: null
+        },
+
+        // ==================================================
+        // FRAKTUR
+        // ==================================================
+        fraktur: {
+            name: "𝔉𝔯𝔞𝔨𝔱𝔲𝔯",
+            upper: "𝔄𝔅ℭ𝔇𝔈𝔉𝔊ℌℑ𝔍𝔎𝔏𝔐𝔑𝔒𝔓𝔔ℜ𝔖𝔗𝔘𝔙𝔚𝔛𝔜ℨ",
+            lower: "𝔞𝔟𝔠𝔡𝔢𝔣𝔤𝔥𝔦𝔧𝔨𝔩𝔪𝔫𝔬𝔭𝔮𝔯𝔰𝔱𝔲𝔳𝔴𝔵𝔶𝔷",
+            digits: null
+        },
+
+        // ==================================================
+        // BOLD FRAKTUR
+        // ==================================================
+        boldFraktur: {
+            name: "𝕭𝖔𝖑𝖉 𝕱𝖗𝖆𝖐𝖙𝖚𝖗",
+            upper: "𝕬𝕭𝕮𝕯𝕰𝕱𝕲𝕳𝕴𝕵𝕶𝕷𝕸𝕹𝕺𝕻𝕼𝕽𝕾𝕿𝖀𝖁𝖂𝖃𝖄𝖅",
+            lower: "𝖆𝖇𝖈𝖉𝖊𝖋𝖌𝖍𝖎𝖏𝖐𝖑𝖒𝖓𝖔𝖕𝖖𝖗𝖘𝖙𝖚𝖛𝖜𝖝𝖞𝖟",
+            digits: null
+        },
+
+        // ==================================================
+        // DOUBLE STRUCK
+        // ==================================================
+        double: {
+            name: "𝔻𝕠𝕦𝕓𝕝𝕖",
+            upper: "𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ",
+            lower: "𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠𝕡𝕢𝕣𝕤𝕥𝕦𝕧𝕨𝕩𝕪𝕫",
+            digits: "𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡"
+        },
+
+        // ==================================================
+        // SANS
+        // ==================================================
+        sans: {
+            name: "𝖲𝖺𝗇𝗌",
+            upper: "𝖠𝖡𝖢𝖣𝖤𝖥𝖦𝖧𝖨𝖩𝖪𝖫𝖬𝖭𝖮𝖯𝖰𝖱𝖲𝖳𝖴𝖵𝖶𝖷𝖸𝖹",
+            lower: "𝖺𝖻𝖼𝖽𝖾𝖿𝗀𝗁𝗂𝗃𝗄𝗅𝗆𝗇𝗈𝗉𝗊𝗋𝗌𝗍𝗎𝗏𝗐𝗑𝗒𝗓",
+            digits: "𝟢𝟣𝟤𝟥𝟦𝟧𝟨𝟩𝟪𝟫"
+        },
+
+        // ==================================================
+        // SANS BOLD
+        // ==================================================
+        sansBold: {
+            name: "𝗦𝗮𝗻𝘀 𝗕𝗼𝗹𝗱",
+            upper: "𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭",
+            lower: "𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇",
+            digits: "𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵"
+        },
+
+        // ==================================================
+        // SANS ITALIC
+        // ==================================================
+        sansItalic: {
+            name: "𝘚𝘢𝘯𝘴 𝘐𝘵𝘢𝘭𝘪𝘤",
+            upper: "𝘈𝘉𝘊𝘋𝘌𝘍𝘎𝘏𝘐𝘑𝘒𝘓𝘔𝘕𝘖𝘗𝘘𝘙𝘚𝘛𝘜𝘝𝘞𝘟𝘠𝘡",
+            lower: "𝘢𝘣𝘤𝘥𝘦𝘧𝘨𝘩𝘪𝘫𝘬𝘭𝘮𝘯𝘰𝘱𝘲𝘳𝘴𝘵𝘶𝘷𝘸𝘹𝘺𝘻",
+            digits: null
+        },
+
+        // ==================================================
+        // SANS BOLD ITALIC
+        // ==================================================
+        sansBoldItalic: {
+            name: "𝙎𝙖𝙣𝙨 𝘽𝙤𝙡𝙙 𝙄𝙩𝙖𝙡𝙞𝙘",
+            upper: "𝘼𝘽𝘾𝘿𝙀𝙁𝙂𝙃𝙄𝙅𝙆𝙇𝙈𝙉𝙊𝙋𝙌𝙍𝙎𝙏𝙐𝙑𝙒𝙓𝙔𝙕",
+            lower: "𝙖𝙗𝙘𝙙𝙚𝙛𝙜𝙝𝙞𝙟𝙠𝙡𝙢𝙣𝙤𝙥𝙦𝙧𝙨𝙩𝙪𝙫𝙬𝙭𝙮𝙯",
+            digits: "𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵"
+        },
+
+        // ==================================================
+        // MONOSPACE
+        // ==================================================
+        monospace: {
+            name: "𝙼𝚘𝚗𝚘𝚜𝚙𝚊𝚌𝚎",
+            upper: "𝙰𝙱𝙲𝙳𝙴𝙵𝙶𝙷𝙸𝙹𝙺𝙻𝙼𝙽𝙾𝙿𝚀𝚁𝚂𝚃𝚄𝚅𝚆𝚇𝚈𝚉",
+            lower: "𝚊𝚋𝚌𝚍𝚎𝚏𝚐𝚑𝚒𝚓𝚔𝚕𝚖𝚗𝚘𝚙𝚚𝚛𝚜𝚝𝚞𝚟𝚠𝚡𝚢𝚣",
+            digits: "𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿"
+        },
+
+        // ==================================================
+        // FULLWIDTH
+        // ==================================================
+        fullwidth: {
+            name: "Ｆｕｌｌｗｉｄｔｈ",
+            upper: "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ",
+            lower: "ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ",
+            digits: "０１２３４５６７８９"
+        }
+    };
+
+
+    function buildFancyMap(style) {
+
+        const map = new Map();
+
+        const addRange = (source, target) => {
+
+            if (!source || !target) return;
+
+            const sourceChars = [...source];
+            const targetChars = [...target];
+
+            for (let i = 0; i < Math.min(sourceChars.length, targetChars.length); i++) {
+                map.set(sourceChars[i], targetChars[i]);
+            }
+        };
+
+        addRange(
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            style.upper
+        );
+
+        addRange(
+            "abcdefghijklmnopqrstuvwxyz",
+            style.lower
+        );
+
+        addRange(
+            "0123456789",
+            style.digits
+        );
+
+        return map;
+    }
+
+
+    const FANCY_TEXT_MAPS = Object.fromEntries(
+        Object.entries(FANCY_TEXT_STYLES)
+        .map(([key, style]) => [
+            key,
+            buildFancyMap(style)
+        ])
+    );
+
+
+    function fancyTextEncode(text, styleName = "bold") {
+
+        const map = FANCY_TEXT_MAPS[styleName];
+
+        if (!map) return text;
+
+        let result = "";
+
+        for (const char of text) {
+
+            // Không có mapping → giữ nguyên
+            result += map.get(char) ?? char;
+        }
+
+        return result;
+    }
+
+
+
+    window.fancyTextEncode = fancyTextEncode;
 
     function rainbowEncodeUserChat(text) {
 
@@ -1260,6 +1471,68 @@
     // Câu chào — muốn đổi chỉ sửa dòng này
     const NEW_USER_GREETING_PREFIX = "hi";
 
+    function mediaElementToToken(media) {
+        const src = media.currentSrc || media.src;
+        if (!src) return null;
+
+        const match = src.match(
+            /\/smileys\/([^/]+)\/(\d+)(\.[^/?#]+)/
+        );
+
+        if (!match) return null;
+
+        const [, name, file, ext] = match;
+
+        const iconSet = Object.values(window.iconSets || {})
+        .find(x => x.name === name);
+
+        if (!iconSet) return null;
+
+        const type = ext.toLowerCase() === ".mp4" ? "v" : "i";
+
+        return `[${type}:${iconSet.id},${file},0]`;
+    }
+
+    function getFullNickToken(nickEl) {
+        if (!nickEl) return "";
+
+        let result = "";
+
+        for (const node of nickEl.childNodes) {
+
+            if (node.nodeType === Node.TEXT_NODE) {
+                result += node.textContent;
+                continue;
+            }
+
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                continue;
+            }
+
+            if (node.matches("img, video")) {
+                const token = mediaElementToToken(node);
+
+                if (token) {
+                    result += token;
+                }
+
+                continue;
+            }
+
+            result += getFullNickToken(node);
+        }
+
+        return result.trim();
+    }
+
+    function findUserNickElement(nick) {
+        if (!nick) return null;
+
+        const target = String(nick).trim();
+
+        return [...document.querySelectorAll(".user-list .item .nick")]
+            .find(el => el.textContent.trim() === target) || null;
+    }
 
     function getCurrentRoomUsers() {
         return new Set(
@@ -1666,9 +1939,21 @@
 
         for (const user of users) {
 
+            const nickEl = findUserNickElement(user);
+
+            const fullNick = nickEl
+            ? getFullNickToken(nickEl)
+            : user;
+
+            console.log("👋 GREETING USER:", {
+                nick: user,
+                nickEl,
+                fullNick
+            });
+
             const text = prefix.includes("@")
-            ? prefix.replace(/@/g, user)
-            : `${prefix} ${user}`;
+            ? prefix.replace(/@/g, fullNick)
+            : `${prefix} ${fullNick}`;
 
             // Kiểm tra riêng nickname này
             const singleLength = getSendLength(text);
@@ -1914,6 +2199,57 @@
         chatForm = form;
         sendButton = chatForm.querySelector('button[type="submit"]');
         chatTextarea = document.querySelector('textarea[name="message"]');
+
+        // ============================================================
+        // FANCY TEXT FONT SELECT
+        // ============================================================
+
+        const fancyTextBar = document.createElement("div");
+
+        fancyTextBar.style.display = "flex";
+        fancyTextBar.style.alignItems = "center";
+        fancyTextBar.style.gap = "5px";
+        fancyTextBar.style.padding = "3px 0";
+
+        const fancyTextLabel = document.createElement("span");
+
+        fancyTextLabel.innerText = "Font:";
+        fancyTextLabel.style.color = "white";
+        fancyTextLabel.style.fontSize = "13px";
+
+        const fancyTextStyleSelect = document.createElement("select");
+
+        fancyTextStyleSelect.id = "dk-fancy-text-style";
+        fancyTextStyleSelect.className = "form-select form-select-sm";
+
+        fancyTextStyleSelect.style.width = "160px";
+        fancyTextStyleSelect.style.flex = "0 0 auto";
+
+        fancyTextStyleSelect.innerHTML = `
+    <option value="off">OFF</option>
+    <option value="bold">𝐁𝐨𝐥𝐝</option>
+    <option value="italic">𝘐𝘵𝘢𝘭𝘪𝘤</option>
+    <option value="boldItalic">𝑩𝒐𝒍𝒅 𝑰𝒕𝒂𝒍𝒊𝒄</option>
+    <option value="script">𝓢𝓬𝓻𝓲𝓹𝓽</option>
+    <option value="boldScript">𝓑𝓸𝓵𝓭 𝓢𝓬𝓻𝓲𝓹𝓽</option>
+    <option value="fraktur">𝔉𝔯𝔞𝔨𝔱𝔲𝔯</option>
+    <option value="boldFraktur">𝕭𝖔𝖑𝖉 𝕱𝖗𝖆𝖐𝖙𝖚𝖗</option>
+    <option value="double">𝔻𝕠𝕦𝕓𝕝𝕖</option>
+    <option value="sans">𝖲𝖺𝗇𝗌</option>
+    <option value="sansBold">𝗦𝗮𝗻𝘀 𝗕𝗼𝗹𝗱</option>
+    <option value="sansItalic">𝘚𝘢𝘯𝘴 𝘐𝘵𝘢𝘭𝘪𝘤</option>
+    <option value="sansBoldItalic">𝙎𝙖𝙣𝙨 𝘽𝙤𝙡𝙙 𝙄𝙩𝙖𝙡𝙞𝙘</option>
+    <option value="monospace">𝙼𝚘𝚗𝚘𝚜𝚙𝚊𝚌𝚎</option>
+    <option value="fullwidth">Ｆｕｌｌｗｉｄｔｈ</option>
+`;
+
+        fancyTextBar.append(
+            fancyTextLabel,
+            fancyTextStyleSelect
+        );
+
+        // Chèn NGAY PHÍA TRÊN form chat
+        form.parentElement.insertBefore(fancyTextBar, form);
 
         // ============================================================
         // MANUAL CHAT
