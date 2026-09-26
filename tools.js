@@ -984,6 +984,67 @@
         ])
     );
 
+    function removeVietnameseDuplicate(text) {
+
+        // Tách Unicode để nhận diện dấu
+        const normalized = text.normalize("NFD");
+
+        // Tách từng từ
+        const words = normalized.split(/(\s+)/);
+
+        return words.map(word => {
+
+            // Không phải từ thì giữ nguyên
+            if (/^\s+$/.test(word)) {
+                return word;
+            }
+
+            // Từ không có combining mark → không xử lý
+            if (!/[\u0300-\u036f]/.test(word)) {
+                return word;
+            }
+
+            const chars = [...word];
+
+            // Kiểm tra duplicate trong từ
+            const VOWELS = new Set([
+                "a", "e", "i", "o", "u", "y",
+                "A", "E", "I", "O", "U", "Y"
+            ]);
+
+            for (let i = 0; i < chars.length; i++) {
+
+                // Chỉ xét nguyên âm
+                if (!VOWELS.has(chars[i])) {
+                    continue;
+                }
+
+                for (let j = i + 1; j < chars.length; j++) {
+
+                    if (chars[i] === chars[j]) {
+
+                        // Chỉ xóa duplicate nguyên âm
+                        chars.splice(i, 1);
+
+                        return chars.join("");
+                    }
+                }
+            }
+
+            return word;
+
+        }).join("").normalize("NFC");
+    }
+    function fancyDChar(char, map) {
+        const isUpper = char === "Đ";
+        const base = map.get(isUpper ? "D" : "d");
+
+        if (!base) return char;
+
+        // Unicode không có mathematical Đ/đ.
+        // Dùng D/d của chính style + combining stroke.
+        return base + "\u0335";
+    }
 
     function fancyTextEncode(text, styleName = "bold") {
 
@@ -991,18 +1052,56 @@
 
         if (!map) return text;
 
+        text = removeVietnameseDuplicate(text);
+
+
+        // Tách chữ có dấu thành:
+        // chữ cái gốc + combining mark
+        const normalized = text.normalize("NFD");
+
         let result = "";
 
-        for (const char of text) {
+        for (const char of normalized) {
 
-            // Không có mapping → giữ nguyên
+            // Đ / đ → dùng D/d của đúng style + nét gạch
+            if (char === "Đ" || char === "đ") {
+                result += fancyDChar(char, map);
+                continue;
+            }
+
+            // Chỉ Fancy hóa chữ cái Latin cơ bản
             result += map.get(char) ?? char;
         }
 
-        return result;
+        // Ghép combining marks trở lại dạng Unicode chuẩn
+        return result.normalize("NFC");
     }
 
 
+    function fancyTextDecode(text, styleName = "bold") {
+
+        const map = FANCY_TEXT_MAPS[styleName];
+
+        if (!map) return text;
+
+        const reverseMap = new Map();
+
+        for (const [normal, fancy] of map.entries()) {
+            reverseMap.set(fancy, normal);
+        }
+
+        // Tách các chữ có dấu để decode phần chữ cái gốc
+        const normalized = text.normalize("NFD");
+
+        let result = "";
+
+        for (const char of normalized) {
+            result += reverseMap.get(char) ?? char;
+        }
+
+        // Ghép lại thành Unicode tiếng Việt chuẩn
+        return result.normalize("NFC");
+    }
 
     window.fancyTextEncode = fancyTextEncode;
 
@@ -1044,8 +1143,16 @@
             ctx.font = '16px Arial';
         }
 
+        const fancyStyle =
+              document.getElementById("dk-fancy-text-style")?.value || "off";
+
+        const fancyText =
+              fancyStyle !== "off"
+        ? fancyTextEncode(text, fancyStyle)
+        : text;
+
         const textLength = [...text].length;
-        const textWidth = ctx.measureText(text).width;
+        const textWidth = ctx.measureText(fancyText).width;
 
         const MAX_CHAT_LENGTH = 160;
         const COLOR_CODE_LENGTH = 5;
@@ -1056,10 +1163,17 @@
             availableChars / COLOR_CODE_LENGTH
         );
 
+        const charWidth =
+              fancyStyle !== "off"
+        ? ctx.measureText(fancyTextEncode("MM", fancyStyle)).width
+        : ctx.measureText("a").width;
+
         const MAX_WIDTH =
               maxColorPoints > 0
-        ? Math.ceil(textWidth / maxColorPoints) +5
+        ? Math.ceil(textWidth / maxColorPoints) + charWidth
         : textWidth;
+
+        //công thêm phàn vôi
 
         console.log("========== RAINBOW DEBUG ==========");
         console.log("TEXT:", text);
@@ -1069,7 +1183,7 @@
         console.log("AVAILABLE CHARS:", availableChars);
         console.log("MAX COLOR POINTS:", maxColorPoints);
         console.log("MAX WIDTH:", MAX_WIDTH);
-        console.log("CHAR WIDTH:", ctx.measureText("1").width);
+        console.log("CHAR WIDTH:", charWidth);
 
         let result = '';
         let currentText = '';
@@ -1092,11 +1206,13 @@
         let colorIndex = 0;
         let currentColor = null;
 
-        for (let i = 0; i < text.length; i++) {
-            const char = text[i];
+        const chars = [...text];
+
+        for (let i = 0; i < chars.length; i++) {
+            const char = chars[i];
 
             // Icon [...] = một block nguyên vẹn, giống như space
-            const iconMatch = text.slice(i).match(/^\[[^\]]*\]/);
+            const iconMatch = chars.slice(i).join('').match(/^\[[^\]]*\]/);
 
             if (iconMatch) {
                 const icon = iconMatch[0];
@@ -1115,8 +1231,15 @@
                     const color = colors[colorIndex];
                     const segmentText = currentText + pendingSpaces;
 
+                    const segmentForMeasure =
+                          fancyStyle !== "off"
+                    ? fancyTextEncode(currentText, fancyStyle)
+                    : currentText;
+
                     const segmentWidth = ctx.measureText(
-                        currentText.replace(/ /g, '').replace(/\[[^\]]*\]/g, '')
+                        segmentForMeasure
+                        .replace(/ /g, '')
+                        .replace(/\[[^\]]*\]/g, '')
                     ).width;
 
                     console.log(
@@ -1149,8 +1272,13 @@
             const candidate =
                   currentText + pendingSpaces + char;
 
+            const candidateFancy =
+                  fancyStyle !== "off"
+            ? fancyTextEncode(candidate, fancyStyle)
+            : candidate;
+
             const testWidth = ctx.measureText(
-                candidate.replace(/ /g, '')
+                candidateFancy.replace(/ /g, '')
             ).width;
 
             console.log(
@@ -1166,8 +1294,13 @@
                 const segmentText =
                       currentText + pendingSpaces;
 
+                const segmentForMeasure =
+                      fancyStyle !== "off"
+                ? fancyTextEncode(segmentText, fancyStyle)
+                : segmentText;
+
                 const segmentWidth = ctx.measureText(
-                    segmentText.replace(/ /g, '')
+                    segmentForMeasure.replace(/ /g, '')
                 ).width;
 
                 console.log(
@@ -1218,8 +1351,13 @@
             // Space cuối cũng gắn vào segment cuối
             const finalText = currentText + pendingSpaces;
 
+            const finalForMeasure =
+                  fancyStyle !== "off"
+            ? fancyTextEncode(currentText, fancyStyle)
+            : currentText;
+
             const segmentWidth = ctx.measureText(
-                currentText.replace(/ /g, '')
+                finalForMeasure.replace(/ /g, '')
             ).width;
 
             console.log(
@@ -1526,18 +1664,16 @@
     }
 
     function findUserNickElement(nick) {
-        if (!nick) return null;
-
-        const target = String(nick).trim();
+        const target = String(nick || "").trim();
 
         return [...document.querySelectorAll(".user-list .item .nick")]
-            .find(el => el.textContent.trim() === target) || null;
+            .find(el => getFullNickToken(el) === target) || null;
     }
 
     function getCurrentRoomUsers() {
         return new Set(
             getRoomItems()
-            .map(item => item.querySelector(".nick")?.innerText.trim())
+            .map(item => getFullNickToken(item.querySelector(".nick")))
             .filter(Boolean)
         );
     }
@@ -1679,15 +1815,27 @@
 
 
     function getMicUsers() {
-
-        return getRoomItems().filter(item => item.querySelector(".info")?.innerText.trim() === "🎤")
-            .map(item => item.querySelector(".nick").innerText.trim());
+        return getRoomItems()
+            .filter(item =>
+                    item.querySelector(".info")?.innerText.trim() === "🎤"
+                   )
+            .map(item =>
+                 getFullNickToken(item.querySelector(".nick"))
+                )
+            .filter(Boolean);
     }
 
     function getQueueUsers() {
-
-        return getRoomItems().filter(item => /^\d+$/.test(item.querySelector(".info")?.innerText.trim() || ""))
-            .map(item => item.querySelector(".nick").innerText.trim());
+        return getRoomItems()
+            .filter(item =>
+                    /^\d+$/.test(
+            item.querySelector(".info")?.innerText.trim() || ""
+        )
+                   )
+            .map(item =>
+                 getFullNickToken(item.querySelector(".nick"))
+                )
+            .filter(Boolean);
     }
 
     function getReturnMicButton() {
@@ -1916,10 +2064,18 @@
         // Giới hạn thực tế của message sau khi thêm mã màu
         const MAX_LENGTH = 160;
 
-        const prefix =
+        const prefixRaw =
               greetingPrefix !== null
         ? greetingPrefix.trim() || "hi"
         : (chatTextarea?.value || "").trim() || "hi";
+
+        const fancyStyle =
+              document.getElementById("dk-fancy-text-style")?.value || "off";
+
+        const prefix =
+              fancyStyle !== "off"
+        ? fancyTextEncode(prefixRaw, fancyStyle)
+        : prefixRaw;
 
         const messages = [];
         let current = "";
@@ -1928,9 +2084,7 @@
         // Kiểm tra độ dài THỰC TẾ sau khi Rainbow encode
         // --------------------------------------------------
         function getSendLength(text) {
-            if (!rainbowChatEnabled) {
-                return text.length;
-            }
+
 
             const encoded = rainbowEncodeUserChat(text);
 
@@ -2248,8 +2402,154 @@
             fancyTextStyleSelect
         );
 
-        // Chèn NGAY PHÍA TRÊN form chat
+        // Chèn Font bar phía trên ô chat
         form.parentElement.insertBefore(fancyTextBar, form);
+        // ============================================================
+        // ✨ FANCY TEXT LIVE TRANSFORM
+        // ============================================================
+
+        let fancyTextUpdating = false;
+        let fancyRawText = "";
+        let fancyComposing = false;
+        let fancyCurrentStyle = "off";
+
+
+        // ------------------------------------------------------------
+        // RAW → FANCY
+        // ------------------------------------------------------------
+
+        function updateFancyDisplay() {
+
+            if (fancyTextUpdating) return;
+
+            const style = fancyTextStyleSelect.value;
+
+            fancyTextUpdating = true;
+
+            if (style === "off") {
+                chatTextarea.value = fancyRawText;
+            } else {
+                chatTextarea.value = fancyTextEncode(
+                    fancyRawText,
+                    style
+                );
+            }
+
+            chatTextarea.setSelectionRange(
+                chatTextarea.value.length,
+                chatTextarea.value.length
+            );
+
+            fancyTextUpdating = false;
+        }
+
+
+        // ------------------------------------------------------------
+        // ĐỔI FONT
+        // ------------------------------------------------------------
+        fancyTextStyleSelect.addEventListener("change", () => {
+
+            if (fancyTextUpdating) return;
+
+            // Text hiện tại đang hiển thị bằng style nào
+            if (fancyCurrentStyle === "off") {
+
+                fancyRawText = chatTextarea.value;
+
+            } else {
+
+                fancyRawText = fancyTextDecode(
+                    chatTextarea.value,
+                    fancyCurrentStyle
+                );
+            }
+
+            // Bây giờ mới chuyển sang style mới
+            fancyCurrentStyle = fancyTextStyleSelect.value;
+
+            updateFancyDisplay();
+        });
+
+        // ------------------------------------------------------------
+        // COMPOSITION START
+        // ------------------------------------------------------------
+
+        chatTextarea.addEventListener("compositionstart", () => {
+
+            fancyComposing = true;
+
+            if (fancyCurrentStyle !== "off") {
+                fancyRawText = fancyTextDecode(
+                    chatTextarea.value,
+                    fancyCurrentStyle
+                );
+                fancyTextUpdating = true;
+
+                chatTextarea.value = fancyRawText;
+
+                chatTextarea.setSelectionRange(
+                    chatTextarea.value.length,
+                    chatTextarea.value.length
+                );
+
+                fancyTextUpdating = false;
+            }
+        });
+
+
+        // ------------------------------------------------------------
+        // INPUT
+        // ------------------------------------------------------------
+
+        chatTextarea.addEventListener("input", () => {
+
+            if (fancyTextUpdating) return;
+
+            // Đang gõ Telex/IME → giữ RAW
+            if (fancyComposing) {
+
+                fancyRawText = chatTextarea.value;
+
+                return;
+            }
+
+            const style = fancyCurrentStyle;
+
+            // OFF
+            if (style === "off") {
+
+                fancyRawText = chatTextarea.value;
+
+                return;
+            }
+
+            // Đang hiển thị FANCY → decode về RAW
+            fancyRawText = fancyTextDecode(
+                chatTextarea.value,
+                style
+            );
+
+            // RAW → FANCY
+            updateFancyDisplay();
+        });
+
+
+        // ------------------------------------------------------------
+        // COMPOSITION END
+        // ------------------------------------------------------------
+
+        chatTextarea.addEventListener("compositionend", () => {
+
+            fancyComposing = false;
+
+            // Lấy RAW sau khi Telex hoàn thành
+            fancyRawText = chatTextarea.value;
+
+            // RAW → FANCY
+            updateFancyDisplay();
+        });
+
+
 
         // ============================================================
         // MANUAL CHAT
@@ -2364,9 +2664,12 @@
         botBtn.innerText = "Hi\nAll!";
 
         botBtn.onclick = async () => {
-            const myNick = document.querySelector(".my-nick")?.innerText.trim();
-            const users = [...document.querySelectorAll(".user-list .nick")]
-            .map(e => e.innerText.trim())
+            const myNickEl = document.querySelector(".my-nick");
+            const myNick = myNickEl
+            ? getFullNickToken(myNickEl)
+            : "";
+
+            const users = [...getCurrentRoomUsers()]
             .filter(name => name && name !== myNick);
 
             await sendGreeting(users);
@@ -2381,17 +2684,19 @@
         hiChatBtn.innerText = "Hi!";
 
         hiChatBtn.onclick = async () => {
-            const myNick = document.querySelector(".my-nick")?.innerText.trim();
+            const myNickEl = document.querySelector(".my-nick");
+            const myNick = myNickEl
+            ? getFullNickToken(myNickEl)
+            : "";
 
-            const roomUsers = new Set(
-                [...document.querySelectorAll(".user-list .nick")]
-                .map(e => e.innerText.trim())
-            );
+            const roomUsers = getCurrentRoomUsers();
 
             const chatUsers = [
-                ...document.querySelectorAll(".chat-message:not(.mine) > span:first-child")
+                ...document.querySelectorAll(
+                    ".chat-message:not(.mine) > span:first-child"
+                )
             ]
-            .map(e => e.innerText.trim())
+            .map(e => getFullNickToken(e))
             .filter(name => roomUsers.has(name));
 
             //   const roomItems = [...document.querySelectorAll(".user-list .item")];
