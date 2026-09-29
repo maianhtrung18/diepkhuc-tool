@@ -104,7 +104,7 @@
 
         /* Phần thân toolbox */
         #my-dkhd-toolbox .toolbox-body {
-            width: max-content;
+            width: 450px;
             min-width: 220px;
             max-width: 500px;
             min-height: 120px;
@@ -121,7 +121,7 @@
 
         /* Chỗ để sau này nhét các nút */
        #my-dkhd-toolbox .toolbox-content {
-    width: max-content;
+    width: 100%t;
     min-width: 100%;
     box-sizing: border-box;
 
@@ -1764,7 +1764,7 @@
         // - 5 giây giữa các message
         // New Member Greeting dùng prefix riêng
         // Không đọc / không sửa textarea
-        await sendGreeting(users, window.getRandomNewUserGreeting() || "hi");
+        await sendGreeting(users);
 
         // Remove đúng batch vừa xử lý
         newUserGreetingQueue.splice(0, users.length);
@@ -2067,7 +2067,7 @@
     // GREETING
     //////////////////////////////////////////////////////
 
-    async function sendGreeting(users, greetingPrefix = null) {
+   async function sendGreeting(users) {
         if (users.length === 0) {
             alert("Không tìm thấy user");
             return;
@@ -2076,18 +2076,12 @@
         // Giới hạn thực tế của message sau khi thêm mã màu
         const MAX_LENGTH = 160;
 
-        const prefixRaw =
-              greetingPrefix !== null
-        ? greetingPrefix.trim() || "hi"
-        : (chatTextarea?.value || "").trim() || "hi";
+
 
         const fancyStyle =
               document.getElementById("dk-fancy-text-style")?.value || "off";
 
-        const prefix =
-              fancyStyle !== "off"
-        ? fancyTextEncode(prefixRaw, fancyStyle)
-        : prefixRaw;
+
 
         const messages = [];
         let current = "";
@@ -2104,6 +2098,13 @@
         }
 
         for (const user of users) {
+            const prefixRaw =
+                  window.getRandomNewUserGreeting() || "hi";
+
+            const prefix =
+                  fancyStyle !== "off"
+            ? fancyTextEncode(prefixRaw, fancyStyle)
+            : prefixRaw;
 
             const nickEl = findUserNickElement(user);
 
