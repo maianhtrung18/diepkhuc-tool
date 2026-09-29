@@ -50,7 +50,11 @@
     let recordingNick = "";
     let recordingStartTime = null;
 
+    let selectedMicDeviceId = "";
+    let selectedMicName = "";
 
+    let selectedWebcamDeviceId = "@off";
+    let selectedWebcamName = "Tắt webcam";
 
     // Audio control
     let audioControlEnabled = false;
@@ -84,7 +88,7 @@
     toolboxStyle.textContent = `
         #my-dkhd-toolbox {
             position: fixed;
-            top: 400px;
+            top: 100px;
             left: 0;
             z-index: 999999999;
             display: flex;
@@ -1987,39 +1991,47 @@
                     log("Radio method not found");
                 }
 
-                const selectWebcam = await waitForElement('select[name="videoDeviceId"]',5000);
+                const selectWebcam =
+                      await waitForElement('select[name="videoDeviceId"]', 5000);
+
                 if (selectWebcam) {
-                    const webcamSelected = selectWebcam.options[selectWebcam.selectedIndex];
-                    if (webcamSelected?.text.trim() === "Tự động") {
-                        selectWebcam.value = "@off";
-                        selectWebcam.dispatchEvent(new Event("change", { bubbles: true }));
-                        log("Đã đổi webcam");
-                    } else {
-                        log("Webcam đã được chọn, bỏ qua");
-                    }
+                    selectWebcam.value = selectedWebcamDeviceId || "@off";
+
+                    selectWebcam.dispatchEvent(
+                        new Event("change", { bubbles: true })
+                    );
+
+                    log(
+                        `📷 Đã chọn webcam: ${
+                        selectedWebcamName || "Tắt webcam"
+                        }`
+                    );
                 }
 
-                const selectAudio = await waitForElement('select[name="audioDeviceId"]', 5000);
+                const selectAudio =
+                      await waitForElement('select[name="audioDeviceId"]', 5000);
+
                 if (selectAudio) {
-                    const audioSelected = selectAudio.options[selectAudio.selectedIndex];
-                    if (audioSelected?.text.trim() === "Tự động") {
-                        const start = Date.now();
-                        let option = null;
-                        while (Date.now() - start < 5000) {
-                            option = [...selectAudio.options]
-                                .find(o => o.text.includes("CABLE Output"));
+                    if (selectedMicDeviceId) {
 
-                            if (option) break;
+                        const option = [...selectAudio.options].find(
+                            o => o.value === selectedMicDeviceId
+                        );
 
-                            await delay(100);
-                        }
                         if (option) {
-                            selectAudio.value = option.value;
-                            selectAudio.dispatchEvent(new Event("change", { bubbles: true }));
-                            log("Đã chọn CABLE Output");
+                            selectAudio.value = selectedMicDeviceId;
+
+                            selectAudio.dispatchEvent(
+                                new Event("change", { bubbles: true })
+                            );
+
+                            log(`🎤 Đã chọn mic: ${selectedMicName}`);
+                        } else {
+                            log(`❌ Không tìm thấy mic: ${selectedMicName}`);
                         }
+
                     } else {
-                        log("Micro đã được chọn, bỏ qua");
+                        log("⚠️ Chưa chọn microphone");
                     }
                 }
 
@@ -2973,9 +2985,145 @@
             );
         };
 
+        async function loadMediaDevices() {
+            const micSelect = document.getElementById("dk-mic-select");
+            const webcamSelect = document.getElementById("dk-webcam-select");
+
+            if (!micSelect || !webcamSelect) return;
+
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+
+                const microphones = devices.filter(
+                    device => device.kind === "audioinput"
+                );
+
+                const webcams = devices.filter(
+                    device => device.kind === "videoinput"
+                );
+
+                // ===== MICRO =====
+                micSelect.innerHTML = "";
+
+                for (const mic of microphones) {
+                    const option = document.createElement("option");
+
+                    option.value = mic.deviceId;
+                    option.textContent =
+                        mic.label || `Microphone ${micSelect.options.length + 1}`;
+
+                    micSelect.appendChild(option);
+                }
+
+                // Ưu tiên CABLE Output
+                let selectedMicOption = [...micSelect.options].find(
+                    option => option.textContent.includes("CABLE Output")
+                );
+
+                // Nếu đã có lựa chọn trước đó thì giữ lại
+                if (!selectedMicOption && selectedMicDeviceId) {
+                    selectedMicOption = [...micSelect.options].find(
+                        option => option.value === selectedMicDeviceId
+                    );
+                }
+
+                // Nếu không có thì lấy mic đầu tiên
+                if (!selectedMicOption && micSelect.options.length > 0) {
+                    selectedMicOption = micSelect.options[0];
+                }
+
+                if (selectedMicOption) {
+                    micSelect.value = selectedMicOption.value;
+                    selectedMicDeviceId = selectedMicOption.value;
+                    selectedMicName = selectedMicOption.textContent;
+                }
+
+                // ===== WEBCAM =====
+                webcamSelect.innerHTML = "";
+
+                const offOption = document.createElement("option");
+                offOption.value = "@off";
+                offOption.textContent = "Tắt webcam";
+
+                webcamSelect.appendChild(offOption);
+
+                for (const webcam of webcams) {
+                    const option = document.createElement("option");
+
+                    option.value = webcam.deviceId;
+                    option.textContent =
+                        webcam.label || `Webcam ${webcamSelect.options.length}`;
+
+                    webcamSelect.appendChild(option);
+                }
+
+                webcamSelect.value = selectedWebcamDeviceId || "@off";
+
+            } catch (err) {
+                console.error("❌ Không enumerate được thiết bị:", err);
+            }
+        }
+
         const toolboxContent = document.getElementById("toolbox-content");
 
         if (toolboxContent) {
+            // ==========================================
+            // MICRO + WEBCAM
+            // ==========================================
+
+            const mediaRow = document.createElement("div");
+            mediaRow.className = "toolbox-row";
+
+            // ----- MICRO -----
+            const micLabel = document.createElement("label");
+            micLabel.innerText = "Micro:";
+            micLabel.style.flex = "0 0 auto";
+            micLabel.style.color = "white";
+
+            const micSelect = document.createElement("select");
+            micSelect.id = "dk-mic-select";
+            micSelect.style.width = "150px";
+
+            micSelect.addEventListener("change", () => {
+                const option =
+                      micSelect.options[micSelect.selectedIndex];
+
+                selectedMicDeviceId = micSelect.value;
+                selectedMicName = option?.textContent || "";
+
+                log(`🎤 Chọn mic: ${selectedMicName}`);
+            });
+
+            // ----- WEBCAM -----
+            const webcamLabel = document.createElement("label");
+            webcamLabel.innerText = "Web:";
+            webcamLabel.style.flex = "0 0 auto";
+            webcamLabel.style.color = "white";
+
+            const webcamSelect = document.createElement("select");
+            webcamSelect.id = "dk-webcam-select";
+            webcamSelect.style.width = "150px";
+
+            webcamSelect.addEventListener("change", () => {
+                const option =
+                      webcamSelect.options[webcamSelect.selectedIndex];
+
+                selectedWebcamDeviceId = webcamSelect.value;
+                selectedWebcamName = option?.textContent || "";
+
+                log(`📷 Chọn webcam: ${selectedWebcamName}`);
+            });
+
+            // Cùng một hàng
+            mediaRow.appendChild(micLabel);
+            mediaRow.appendChild(micSelect);
+            mediaRow.appendChild(webcamLabel);
+            mediaRow.appendChild(webcamSelect);
+
+            toolboxContent.appendChild(mediaRow);
+
+            // Load danh sách thiết bị
+            await loadMediaDevices();
 
             // Hàng 1: Auto Mic + Start
             const row1 = document.createElement("div");
