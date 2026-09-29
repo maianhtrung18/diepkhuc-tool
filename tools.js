@@ -1764,7 +1764,7 @@
         // - 5 giây giữa các message
         // New Member Greeting dùng prefix riêng
         // Không đọc / không sửa textarea
-        await sendGreeting(users, NEW_USER_GREETING_PREFIX);
+        await sendGreeting(users, window.getRandomNewUserGreeting() || "hi");
 
         // Remove đúng batch vừa xử lý
         newUserGreetingQueue.splice(0, users.length);
@@ -3400,7 +3400,132 @@
 
         toolboxContent.appendChild(greetingRow);
 
+        // ========================================
+        // NEW USER GREETING - MESSAGE LIST UI
+        // ========================================
 
+        const greetingMessageContainer = document.createElement("div");
+
+        greetingMessageContainer.style.display = "flex";
+        greetingMessageContainer.style.flexDirection = "column";
+        greetingMessageContainer.style.gap = "6px";
+        greetingMessageContainer.style.width = "100%";
+
+
+
+        // Input + ADD
+
+        const greetingMessageInputRow = document.createElement("div");
+
+        greetingMessageInputRow.style.display = "flex";
+        greetingMessageInputRow.style.gap = "5px";
+        greetingMessageInputRow.style.width = "100%";
+
+        const greetingMessageInput = document.createElement("input");
+
+        greetingMessageInput.type = "text";
+        greetingMessageInput.placeholder =
+            "Nhập câu chào, dùng @ cho nickname";
+
+        greetingMessageInput.style.flex = "1";
+        greetingMessageInput.style.minWidth = "0";
+
+        const greetingMessageAddButton = document.createElement("button");
+
+        greetingMessageAddButton.type = "button";
+        greetingMessageAddButton.innerText = "ADD";
+        greetingMessageAddButton.className = "btn btn-primary";
+
+        greetingMessageInputRow.appendChild(greetingMessageInput);
+        greetingMessageInputRow.appendChild(greetingMessageAddButton);
+
+        greetingMessageContainer.appendChild(greetingMessageInputRow);
+
+
+        // Danh sách
+
+        const greetingMessageList = document.createElement("div");
+
+        greetingMessageList.style.display = "flex";
+        greetingMessageList.style.flexDirection = "column";
+        greetingMessageList.style.gap = "4px";
+        greetingMessageList.style.maxHeight = "120px";
+        greetingMessageList.style.overflowY = "auto";
+
+        greetingMessageContainer.appendChild(greetingMessageList);
+
+
+        // Thêm vào toolbox
+
+        toolboxContent.appendChild(greetingMessageContainer);
+
+        function getNewUserGreetingMessages() {
+
+            return Array.from(
+                greetingMessageList.querySelectorAll("span")
+            )
+                .map(span => span.innerText.trim())
+                .filter(Boolean);
+
+        }
+
+        window.getNewUserGreetingMessages = getNewUserGreetingMessages;
+
+        function getRandomNewUserGreeting() {
+
+            const messages = getNewUserGreetingMessages();
+
+            if (messages.length === 0) {
+                return null;
+            }
+
+            const index = Math.floor(Math.random() * messages.length);
+
+            return messages[index];
+
+        }
+
+        window.getRandomNewUserGreeting = getRandomNewUserGreeting;
+
+        greetingMessageAddButton.addEventListener("click", function () {
+
+            const message = greetingMessageInput.value.trim();
+
+            if (!message) return;
+
+            const item = document.createElement("div");
+
+            item.style.display = "flex";
+            item.style.alignItems = "center";
+            item.style.gap = "5px";
+            item.style.padding = "4px 6px";
+            item.style.background = "rgba(255,255,255,0.08)";
+            item.style.borderRadius = "4px";
+
+            const messageText = document.createElement("span");
+
+            messageText.innerText = message;
+            messageText.style.flex = "1";
+            messageText.style.color = "white";
+
+            const deleteButton = document.createElement("button");
+
+            deleteButton.type = "button";
+            deleteButton.innerText = "X";
+            deleteButton.style.padding = "2px 6px";
+            deleteButton.style.cursor = "pointer";
+
+            deleteButton.addEventListener("click", function () {
+                item.remove();
+            });
+
+            item.appendChild(messageText);
+            item.appendChild(deleteButton);
+
+            greetingMessageList.appendChild(item);
+
+            greetingMessageInput.value = "";
+        });
         const toolbar = document.createElement("div");
         toolbar.id = "mic-queue-pro-toolbar";
         toolbar.style.display = "flex";
