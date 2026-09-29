@@ -2067,7 +2067,7 @@
     // GREETING
     //////////////////////////////////////////////////////
 
-   async function sendGreeting(users) {
+    async function sendGreeting(users) {
         if (users.length === 0) {
             alert("Không tìm thấy user");
             return;
@@ -3471,19 +3471,34 @@
         }
 
         window.getNewUserGreetingMessages = getNewUserGreetingMessages;
+        let greetingShufflePool = [];
 
         function getRandomNewUserGreeting() {
-
             const messages = getNewUserGreetingMessages();
 
             if (messages.length === 0) {
+                greetingShufflePool = [];
                 return null;
             }
 
-            const index = Math.floor(Math.random() * messages.length);
+            // Đồng bộ pool nếu danh sách câu chào thay đổi
+            greetingShufflePool = greetingShufflePool.filter(msg =>
+                                                             messages.includes(msg)
+                                                            );
 
-            return messages[index];
+            // Hết vòng → tạo vòng mới
+            if (greetingShufflePool.length === 0) {
+                greetingShufflePool = [...messages];
+            }
 
+            // Random 1 câu trong pool
+            const index = Math.floor(Math.random() * greetingShufflePool.length);
+            const message = greetingShufflePool[index];
+
+            // Đã dùng thì loại khỏi vòng hiện tại
+            greetingShufflePool.splice(index, 1);
+
+            return message;
         }
 
         window.getRandomNewUserGreeting = getRandomNewUserGreeting;
