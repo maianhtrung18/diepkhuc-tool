@@ -1612,6 +1612,7 @@
 
     // Câu chào — muốn đổi chỉ sửa dòng này
     const NEW_USER_GREETING_PREFIX = "hi";
+    const GREETING_STORAGE_KEY = "dk_new_user_greeting_messages";
 
     function mediaElementToToken(media) {
         const src = media.currentSrc || media.src;
@@ -3470,6 +3471,24 @@
 
         }
 
+        function saveNewUserGreetingMessages() {
+            localStorage.setItem(
+                GREETING_STORAGE_KEY,
+                JSON.stringify(getNewUserGreetingMessages())
+            );
+        }
+
+        function loadNewUserGreetingMessages() {
+            const messages = JSON.parse(
+                localStorage.getItem(GREETING_STORAGE_KEY) || "[]"
+            );
+
+            messages.forEach(message => {
+                greetingMessageInput.value = message;
+                greetingMessageAddButton.click();
+            });
+        }
+
         window.getNewUserGreetingMessages = getNewUserGreetingMessages;
         let greetingShufflePool = [];
 
@@ -3533,15 +3552,18 @@
 
             deleteButton.addEventListener("click", function () {
                 item.remove();
+                saveNewUserGreetingMessages();
+
             });
 
             item.appendChild(messageText);
             item.appendChild(deleteButton);
 
             greetingMessageList.appendChild(item);
-
             greetingMessageInput.value = "";
+            saveNewUserGreetingMessages();
         });
+        loadNewUserGreetingMessages();
         const toolbar = document.createElement("div");
         toolbar.id = "mic-queue-pro-toolbar";
         toolbar.style.display = "flex";
