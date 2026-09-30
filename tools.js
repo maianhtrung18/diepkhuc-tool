@@ -3461,20 +3461,11 @@
 
         toolboxContent.appendChild(greetingMessageContainer);
 
-        function getNewUserGreetingMessages() {
 
-            return Array.from(
-                greetingMessageList.querySelectorAll("span")
-            )
-                .map(span => span.innerText.trim())
-                .filter(Boolean);
-
-        }
-
-        function saveNewUserGreetingMessages() {
+        function saveNewUserGreetingMessages(messages) {
             localStorage.setItem(
                 GREETING_STORAGE_KEY,
-                JSON.stringify(getNewUserGreetingMessages())
+                JSON.stringify(messages)
             );
         }
 
@@ -3483,17 +3474,62 @@
                 localStorage.getItem(GREETING_STORAGE_KEY) || "[]"
             );
 
+            greetingMessageList.innerHTML = "";
+
             messages.forEach(message => {
-                greetingMessageInput.value = message;
-                greetingMessageAddButton.click();
+
+                const item = document.createElement("div");
+
+                item.style.display = "flex";
+                item.style.alignItems = "center";
+                item.style.gap = "5px";
+                item.style.padding = "4px 6px";
+                item.style.background = "rgba(255,255,255,0.08)";
+                item.style.borderRadius = "4px";
+
+                const messageText = document.createElement("span");
+
+                messageText.innerText = message;
+                messageText.style.flex = "1";
+                messageText.style.color = "white";
+
+                const deleteButton = document.createElement("button");
+
+                deleteButton.type = "button";
+                deleteButton.innerText = "X";
+                deleteButton.style.padding = "2px 6px";
+                deleteButton.style.cursor = "pointer";
+
+                deleteButton.addEventListener("click", function () {
+
+                    const messages = JSON.parse(
+                        localStorage.getItem(GREETING_STORAGE_KEY) || "[]"
+                    );
+
+                    const index = messages.indexOf(message);
+
+                    if (index !== -1) {
+                        messages.splice(index, 1);
+                    }
+
+                    saveNewUserGreetingMessages(messages);
+
+                    loadNewUserGreetingMessages();
+                });
+
+                item.appendChild(messageText);
+                item.appendChild(deleteButton);
+
+                greetingMessageList.appendChild(item);
             });
         }
 
-        window.getNewUserGreetingMessages = getNewUserGreetingMessages;
         let greetingShufflePool = [];
 
         function getRandomNewUserGreeting() {
-            const messages = getNewUserGreetingMessages();
+            const messages = JSON.parse(
+                localStorage.getItem(GREETING_STORAGE_KEY) || "[]"
+            );
 
             if (messages.length === 0) {
                 greetingShufflePool = [];
@@ -3528,40 +3564,17 @@
 
             if (!message) return;
 
-            const item = document.createElement("div");
+            const messages = JSON.parse(
+                localStorage.getItem(GREETING_STORAGE_KEY) || "[]"
+            );
 
-            item.style.display = "flex";
-            item.style.alignItems = "center";
-            item.style.gap = "5px";
-            item.style.padding = "4px 6px";
-            item.style.background = "rgba(255,255,255,0.08)";
-            item.style.borderRadius = "4px";
+            messages.push(message);
 
-            const messageText = document.createElement("span");
+            saveNewUserGreetingMessages(messages);
 
-            messageText.innerText = message;
-            messageText.style.flex = "1";
-            messageText.style.color = "white";
-
-            const deleteButton = document.createElement("button");
-
-            deleteButton.type = "button";
-            deleteButton.innerText = "X";
-            deleteButton.style.padding = "2px 6px";
-            deleteButton.style.cursor = "pointer";
-
-            deleteButton.addEventListener("click", function () {
-                item.remove();
-                saveNewUserGreetingMessages();
-
-            });
-
-            item.appendChild(messageText);
-            item.appendChild(deleteButton);
-
-            greetingMessageList.appendChild(item);
             greetingMessageInput.value = "";
-            saveNewUserGreetingMessages();
+
+            loadNewUserGreetingMessages();
         });
         loadNewUserGreetingMessages();
         const toolbar = document.createElement("div");
