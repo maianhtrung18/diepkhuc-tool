@@ -2122,9 +2122,9 @@
             : `${prefix} ${fullNick}`;
 
             // Kiểm tra riêng nickname này
-            const singleLength = getSendLength(text);
+            const singleEncoded = rainbowEncodeUserChat(text);
 
-            if (singleLength > MAX_LENGTH) {
+            if (singleEncoded.length > MAX_LENGTH) {
                 alert(`Nội dung quá dài: ${text}`);
                 return;
             }
@@ -2132,6 +2132,7 @@
             // Message đầu tiên
             if (current === "") {
                 current = text;
+                currentEncoded = singleEncoded;
                 continue;
             }
 
