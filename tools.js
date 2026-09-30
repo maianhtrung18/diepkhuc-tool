@@ -1402,7 +1402,7 @@
             const item = botSendQueue[0]; // KHÔNG shift ở đây
 
             try {
-                const sendMessage = rainbowEncodeUserChat(item.message);
+                const sendMessage = item.message;
 
                 console.log("📤 PUBLIC CHAT SEND:", sendMessage);
 
@@ -1875,8 +1875,9 @@
                 }
 
                 const randomMessage = getRandomMessage(autoCommentMessage);
+                const encodedMessage = rainbowEncodeUserChat(randomMessage);
 
-                await fastSend(randomMessage);
+                await fastSend(encodedMessage);
                 log(`Auto Comment: ${randomMessage}`);
 
                 const seconds = parseInt(commentDelayInput?.value, 10) || 90;
@@ -2077,15 +2078,12 @@
         // Giới hạn thực tế của message sau khi thêm mã màu
         const MAX_LENGTH = 160;
 
-
-
         const fancyStyle =
               document.getElementById("dk-fancy-text-style")?.value || "off";
 
-
-
         const messages = [];
         let current = "";
+        let currentEncoded = "";
 
         // --------------------------------------------------
         // Kiểm tra độ dài THỰC TẾ sau khi Rainbow encode
@@ -2140,33 +2138,31 @@
             // Thử thêm nickname vào message hiện tại
             const candidate = current + ", " + text;
 
-            // Quan trọng:
-            // candidate vẫn là text sạch, chưa có mã màu.
-            // Rainbow chỉ được encode để PREVIEW độ dài.
-            const candidateLength = getSendLength(candidate);
+            const candidateEncoded = rainbowEncodeUserChat(candidate);
 
-            if (candidateLength <= MAX_LENGTH) {
+            if (candidateEncoded.length <= MAX_LENGTH) {
 
-                // Vẫn đủ chỗ → nhận nickname
+                // Candidate vẫn hợp lệ
                 current = candidate;
+                currentEncoded = candidateEncoded;
 
             } else {
 
-                // Vượt 155 → chốt message hiện tại
-                messages.push(current);
+                // Candidate vượt → dùng rainbow của LẦN TRƯỚC
+                messages.push(currentEncoded);
 
-                // Nickname này chuyển sang message kế
+                // User này sang message mới
                 current = text;
+                currentEncoded = rainbowEncodeUserChat(current);
             }
         }
 
-        if (current) {
-            messages.push(current);
+        if (currentEncoded) {
+            messages.push(currentEncoded);
         }
-
         // --------------------------------------------------
-        // Đẩy text SẠCH vào fastSend()
-        // Rainbow + default color sẽ được xử lý ở send layer
+        // Đẩy text ĐÃ ENCODE vào fastSend()
+        // Queue không encode lại
         // --------------------------------------------------
         for (const message of messages) {
 
