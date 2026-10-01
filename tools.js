@@ -1765,7 +1765,9 @@
         // - 5 giây giữa các message
         // New Member Greeting dùng prefix riêng
         // Không đọc / không sửa textarea
-        await sendGreeting(users);
+        const prefix = window.getRandomNewUserGreeting() || "hi";
+
+        await sendGreeting(users, prefix);
 
         // Remove đúng batch vừa xử lý
         newUserGreetingQueue.splice(0, users.length);
@@ -2069,7 +2071,7 @@
     // GREETING
     //////////////////////////////////////////////////////
 
-    async function sendGreeting(users) {
+    async function sendGreeting(users, prefixOverride = null) {
         if (users.length === 0) {
             alert("Không tìm thấy user");
             return;
@@ -2088,22 +2090,26 @@
         // --------------------------------------------------
         // Kiểm tra độ dài THỰC TẾ sau khi Rainbow encode
         // --------------------------------------------------
-        function getSendLength(text) {
 
+        const prefixRaw =
+              prefixOverride !== null
+        ? prefixOverride.trim() || "hi"
+        : (chatTextarea?.value || "").trim() || "hi";
 
-            const encoded = rainbowEncodeUserChat(text);
-
-            return encoded.length;
+        // Hi / Hi All → lấy xong thì xóa text field
+        if (prefixOverride === null && chatTextarea) {
+            chatTextarea.value = "";
+            chatTextarea.dispatchEvent(
+                new Event("input", { bubbles: true })
+            );
         }
 
-        for (const user of users) {
-            const prefixRaw =
-                  window.getRandomNewUserGreeting() || "hi";
+        const prefix =
+              fancyStyle !== "off"
+        ? fancyTextEncode(prefixRaw, fancyStyle)
+        : prefixRaw;
 
-            const prefix =
-                  fancyStyle !== "off"
-            ? fancyTextEncode(prefixRaw, fancyStyle)
-            : prefixRaw;
+        for (const user of users) {
 
             const nickEl = findUserNickElement(user);
 
