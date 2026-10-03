@@ -2003,6 +2003,15 @@
 
 
     function getMicUsers() {
+
+        const myNickEl =
+              document.querySelector(".my-nick");
+
+        const myNick =
+              myNickEl
+        ? getFullNickToken(myNickEl)
+        : "";
+
         return getRoomItems()
             .filter(item =>
                     item.querySelector(".info")?.innerText.trim() === "🎤"
@@ -2015,7 +2024,10 @@
                 color: getNickColor(nickEl)
             };
         })
-            .filter(user => user.fullNick);
+            .filter(user =>
+                    user.fullNick &&
+                    user.fullNick !== myNick
+                   );
     }
 
     // ========================================
