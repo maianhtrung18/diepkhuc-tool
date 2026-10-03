@@ -42,7 +42,11 @@
     let dkManualChatSending = false;
     let rainbowChatEnabled = false;
     let rainbowChatStyle = "random";
-    let customColors = [];
+    const CUSTOM_COLORS_KEY = "dk_rainbow_custom_colors";
+
+    let customColors = JSON.parse(
+        localStorage.getItem(CUSTOM_COLORS_KEY) || "[]"
+    );
 
     let mediaRecorder = null;
     let recordedChunks = [];
@@ -3669,30 +3673,18 @@
 
             function addCustomColorPicker() {
 
-                const colorInput = document.createElement("input");
-
-                colorInput.type = "color";
-                colorInput.value = "#ff0000";
-
-                colorInput.style.width = "28px";
-                colorInput.style.height = "28px";
-                colorInput.style.padding = "0";
-                colorInput.style.border = "none";
-                colorInput.style.cursor = "pointer";
-
-
                 // ==============================
-                // Thêm màu ban đầu
+                // Thêm màu mặc định
                 // ==============================
 
-                const hex = colorInput.value.replace("#", "");
-
-                const color3 =
-                      hex[0] +
-                      hex[2] +
-                      hex[4];
+                const color3 = "f00";
 
                 customColors.push(color3);
+
+                localStorage.setItem(
+                    CUSTOM_COLORS_KEY,
+                    JSON.stringify(customColors)
+                );
 
                 COLOR_STYLES.custom =
                     createMultiGradientPalette(
@@ -3700,80 +3692,118 @@
                     24
                 );
 
-
-                // ==============================
-                // Đổi màu
-                // ==============================
-
-                colorInput.onchange = () => {
-
-                    const hex = colorInput.value.replace("#", "");
-
-                    const color3 =
-                          hex[0] +
-                          hex[2] +
-                          hex[4];
-
-                    // Tìm vị trí hiện tại của input
-                    const index =
-                          [...customColorContainer.querySelectorAll('input[type="color"]')]
-                    .indexOf(colorInput);
-
-                    if (index !== -1) {
-
-                        customColors[index] = color3;
-
-                        COLOR_STYLES.custom =
-                            createMultiGradientPalette(
-                            customColors,
-                            24
-                        );
-                    }
-
-                    console.log(
-                        "🎨 Custom Colors:",
-                        customColors
-                    );
-                };
-
-
-                // ==============================
-                // Click phải = Xóa màu
-                // ==============================
-
-                colorInput.oncontextmenu = (e) => {
-
-                    e.preventDefault();
-
-                    const index =
-                          [...customColorContainer.querySelectorAll('input[type="color"]')]
-                    .indexOf(colorInput);
-
-                    if (index !== -1) {
-
-                        customColors.splice(index, 1);
-
-                        COLOR_STYLES.custom =
-                            createMultiGradientPalette(
-                            customColors,
-                            24
-                        );
-
-                        colorInput.remove();
-                    }
-
-                    console.log(
-                        "🎨 Custom Colors:",
-                        customColors
-                    );
-                };
-
-
-                customColorContainer.insertBefore(
-                    colorInput,
-                    addCustomColorButton
-                );
+                loadCustomColorsUI();
             }
+
+            function loadCustomColorsUI() {
+                COLOR_STYLES.custom =
+                    createMultiGradientPalette(
+                    customColors,
+                    24
+                );
+
+                // Xóa UI cũ
+                customColorContainer
+                    .querySelectorAll('input[type="color"]')
+                    .forEach(input => input.remove());
+
+
+                // Load lại UI từ customColors
+                customColors.forEach(color3 => {
+
+                    const colorInput =
+                          document.createElement("input");
+
+                    colorInput.type = "color";
+
+                    colorInput.value =
+                        "#" +
+                        color3[0] + color3[0] +
+                        color3[1] + color3[1] +
+                        color3[2] + color3[2];
+
+                    colorInput.style.width = "28px";
+                    colorInput.style.height = "28px";
+                    colorInput.style.padding = "0";
+                    colorInput.style.border = "none";
+                    colorInput.style.cursor = "pointer";
+
+
+                    // Đổi màu
+                    colorInput.onchange = () => {
+
+                        const hex =
+                              colorInput.value.replace("#", "");
+
+                        const newColor =
+                              hex[0] +
+                              hex[2] +
+                              hex[4];
+
+                        const index =
+                              [...customColorContainer.querySelectorAll(
+                                  'input[type="color"]'
+                              )].indexOf(colorInput);
+
+                        if (index !== -1) {
+
+                            customColors[index] = newColor;
+
+                            localStorage.setItem(
+                                CUSTOM_COLORS_KEY,
+                                JSON.stringify(customColors)
+                            );
+
+                            COLOR_STYLES.custom =
+                                createMultiGradientPalette(
+                                customColors,
+                                24
+                            );
+
+                            loadCustomColorsUI();
+                        }
+                    };
+
+
+                    // Click phải = xóa
+                    colorInput.oncontextmenu = (e) => {
+
+                        e.preventDefault();
+
+                        const index =
+                              [...customColorContainer.querySelectorAll(
+                                  'input[type="color"]'
+                              )].indexOf(colorInput);
+
+                        if (index !== -1) {
+
+                            customColors.splice(index, 1);
+
+                            localStorage.setItem(
+                                CUSTOM_COLORS_KEY,
+                                JSON.stringify(customColors)
+                            );
+
+                            COLOR_STYLES.custom =
+                                createMultiGradientPalette(
+                                customColors,
+                                24
+                            );
+
+                            loadCustomColorsUI();
+                        }
+                    };
+
+
+                    customColorContainer.insertBefore(
+                        colorInput,
+                        addCustomColorButton
+                    );
+                });
+            }
+
+            loadCustomColorsUI();
+
             addCustomColorButton.onclick = () => {
                 addCustomColorPicker();
             };
