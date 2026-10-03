@@ -1743,6 +1743,15 @@
     let newUserGreetingTimer = null;
     let newUserGreetingEnabled = false;
 
+    // ========================================
+    // NEW MIC GREETING STATE
+    // ========================================
+
+    let newMicGreetingEnabled = false;
+
+    const MIC_GREETING_STORAGE_KEY =
+          "dk_new_mic_greeting_messages";
+
     // Queue Welcome New Member
     let newUserGreetingQueue = [];
     let newUserGreetingQueueTimer = null;
@@ -2008,6 +2017,234 @@
         })
             .filter(user => user.fullNick);
     }
+
+    // ========================================
+    // NEW MIC GREETING
+    // ========================================
+
+    let previousMicUser = null;
+    let newMicGreetingReady = false;
+    let newMicGreetingTimer = null;
+
+    let micGreetingShufflePool = [];
+
+
+    // ========================================
+    // RANDOM MIC GREETING
+    // ========================================
+
+    function getRandomNewMicGreeting() {
+
+        const messages = JSON.parse(
+            localStorage.getItem(
+                MIC_GREETING_STORAGE_KEY
+            ) || "[]"
+        );
+
+        if (messages.length === 0) {
+
+            micGreetingShufflePool = [];
+
+            return null;
+        }
+
+
+        // Đồng bộ pool nếu danh sách câu chào thay đổi
+        micGreetingShufflePool =
+            micGreetingShufflePool.filter(
+            message =>
+            messages.includes(message)
+        );
+
+
+        // Hết vòng → tạo vòng mới
+        if (micGreetingShufflePool.length === 0) {
+
+            micGreetingShufflePool =
+                [...messages];
+        }
+
+
+        // Random 1 câu
+        const index =
+              Math.floor(
+                  Math.random() *
+                  micGreetingShufflePool.length
+              );
+
+
+        const message =
+              micGreetingShufflePool[index];
+
+
+        // Đã dùng → loại khỏi vòng hiện tại
+        micGreetingShufflePool.splice(
+            index,
+            1
+        );
+
+
+        return message;
+    }
+
+
+    window.getRandomNewMicGreeting =
+        getRandomNewMicGreeting;
+
+
+    // ========================================
+    // CHECK NEW MIC USER
+    // ========================================
+
+    async function checkNewMicUser() {
+
+        const micUsers =
+              getMicUsers();
+
+
+        // ========================================
+        // KHÔNG CÓ AI ON MIC
+        // ========================================
+
+        if (micUsers.length === 0) {
+
+            previousMicUser = null;
+
+            return;
+        }
+
+
+        // Vì room chỉ có 1 người ON MIC
+        const currentMicUser =
+              micUsers[0];
+
+
+        // ========================================
+        // LẦN CHECK ĐẦU TIÊN
+        // ========================================
+
+        if (!newMicGreetingReady) {
+
+            previousMicUser =
+                currentMicUser.fullNick;
+
+            newMicGreetingReady =
+                true;
+
+            return;
+        }
+
+
+        // ========================================
+        // OFF → CHỈ SNAPSHOT
+        // ========================================
+
+        if (!newMicGreetingEnabled) {
+
+            previousMicUser =
+                currentMicUser.fullNick;
+
+            return;
+        }
+
+
+        // ========================================
+        // VẪN LÀ NGƯỜI CŨ
+        // ========================================
+
+        if (
+            currentMicUser.fullNick ===
+            previousMicUser
+        ) {
+
+            return;
+        }
+
+
+        // ========================================
+        // NGƯỜI MỚI LÊN MIC
+        // ========================================
+
+        previousMicUser =
+            currentMicUser.fullNick;
+
+
+        console.log(
+            "🎤 NEW MIC USER:",
+            currentMicUser
+        );
+
+
+        // Lấy câu chào random
+        const prefix =
+              window.getRandomNewMicGreeting() || "hi";
+
+
+        // Gửi greeting
+        await sendGreeting(
+            [currentMicUser],
+            prefix
+        );
+    }
+
+
+    // ========================================
+    // INIT NEW MIC GREETING
+    // ========================================
+
+    function initNewMicGreeting() {
+
+        const userList =
+              document.querySelector(
+                  ".user-list"
+              );
+
+
+        if (!userList) {
+
+            console.warn(
+                "⚠️ Welcome On Mic: không tìm thấy .user-list"
+            );
+
+            return;
+        }
+
+
+        // Snapshot trạng thái ban đầu
+        checkNewMicUser();
+
+
+        const observer =
+              new MutationObserver(() => {
+
+                  clearTimeout(
+                      newMicGreetingTimer
+                  );
+
+
+                  newMicGreetingTimer =
+                      setTimeout(() => {
+
+                      checkNewMicUser();
+
+                  }, 150);
+              });
+
+
+        observer.observe(
+            userList,
+            {
+                childList: true,
+                subtree: true
+            }
+        );
+
+
+        console.log(
+            "🎤 Welcome On Mic ready"
+        );
+    }
+
 
     function getQueueUsers() {
         return getRoomItems()
@@ -3819,6 +4056,353 @@
 
 
 
+        // ========================================
+        // ON / OFF BUTTON
+        // ========================================
+
+        const newMicGreetingBtn =
+              document.createElement("button");
+
+        newMicGreetingBtn.type = "button";
+        newMicGreetingBtn.className = "audio-switch";
+
+        newMicGreetingBtn.onclick = () => {
+
+            newMicGreetingEnabled =
+                !newMicGreetingEnabled;
+
+            newMicGreetingBtn.classList.toggle(
+                "on",
+                newMicGreetingEnabled
+            );
+
+            console.log(
+                "New Mic Greeting:",
+                newMicGreetingEnabled
+                ? "ON"
+                : "OFF"
+            );
+        };
+
+        // Mặc định OFF
+        newMicGreetingBtn.classList.remove("on");
+
+
+        // ========================================
+        // ROW
+        // ========================================
+
+        const micGreetingRow =
+              document.createElement("div");
+
+        micGreetingRow.className =
+            "toolbox-row";
+
+        const micGreetingLabel =
+              document.createElement("label");
+
+        micGreetingLabel.innerText =
+            "Welcome On Mic";
+
+        micGreetingLabel.style.color =
+            "white";
+
+        micGreetingRow.appendChild(
+            micGreetingLabel
+        );
+
+        micGreetingRow.appendChild(
+            newMicGreetingBtn
+        );
+
+        toolboxContent.appendChild(
+            micGreetingRow
+        );
+
+
+        // ========================================
+        // MESSAGE LIST UI
+        // ========================================
+
+        const micGreetingMessageContainer =
+              document.createElement("div");
+
+        micGreetingMessageContainer.style.display =
+            "flex";
+
+        micGreetingMessageContainer.style.flexDirection =
+            "column";
+
+        micGreetingMessageContainer.style.gap =
+            "6px";
+
+        micGreetingMessageContainer.style.width =
+            "100%";
+
+
+        // ========================================
+        // INPUT + ADD
+        // ========================================
+
+        const micGreetingMessageInputRow =
+              document.createElement("div");
+
+        micGreetingMessageInputRow.style.display =
+            "flex";
+
+        micGreetingMessageInputRow.style.gap =
+            "5px";
+
+        micGreetingMessageInputRow.style.width =
+            "100%";
+
+
+        const micGreetingMessageInput =
+              document.createElement("input");
+
+        micGreetingMessageInput.type =
+            "text";
+
+        micGreetingMessageInput.placeholder =
+            "Nhập câu chào, dùng @ cho nickname";
+
+        micGreetingMessageInput.style.flex =
+            "1";
+
+        micGreetingMessageInput.style.minWidth =
+            "0";
+
+
+        const micGreetingMessageAddButton =
+              document.createElement("button");
+
+        micGreetingMessageAddButton.type =
+            "button";
+
+        micGreetingMessageAddButton.innerText =
+            "ADD";
+
+        micGreetingMessageAddButton.className =
+            "btn btn-primary";
+
+
+        micGreetingMessageInputRow.appendChild(
+            micGreetingMessageInput
+        );
+
+        micGreetingMessageInputRow.appendChild(
+            micGreetingMessageAddButton
+        );
+
+        micGreetingMessageContainer.appendChild(
+            micGreetingMessageInputRow
+        );
+
+
+        // ========================================
+        // MESSAGE LIST
+        // ========================================
+
+        const micGreetingMessageList =
+              document.createElement("div");
+
+        micGreetingMessageList.style.display =
+            "flex";
+
+        micGreetingMessageList.style.flexDirection =
+            "column";
+
+        micGreetingMessageList.style.gap =
+            "4px";
+
+        micGreetingMessageList.style.maxHeight =
+            "120px";
+
+        micGreetingMessageList.style.overflowY =
+            "auto";
+
+        micGreetingMessageContainer.appendChild(
+            micGreetingMessageList
+        );
+
+
+        // ========================================
+        // ADD TO TOOLBOX
+        // ========================================
+
+        toolboxContent.appendChild(
+            micGreetingMessageContainer
+        );
+
+
+        // ========================================
+        // SAVE
+        // ========================================
+
+        function saveNewMicGreetingMessages(messages) {
+
+            localStorage.setItem(
+                MIC_GREETING_STORAGE_KEY,
+                JSON.stringify(messages)
+            );
+        }
+
+
+        // ========================================
+        // LOAD
+        // ========================================
+
+        function loadNewMicGreetingMessages() {
+
+            const messages = JSON.parse(
+                localStorage.getItem(
+                    MIC_GREETING_STORAGE_KEY
+                ) || "[]"
+            );
+
+            micGreetingMessageList.innerHTML =
+                "";
+
+            messages.forEach(message => {
+
+                const item =
+                      document.createElement("div");
+
+                item.style.display =
+                    "flex";
+
+                item.style.alignItems =
+                    "center";
+
+                item.style.gap =
+                    "5px";
+
+                item.style.padding =
+                    "4px 6px";
+
+                item.style.background =
+                    "rgba(255,255,255,0.08)";
+
+                item.style.borderRadius =
+                    "4px";
+
+
+                const messageText =
+                      document.createElement("span");
+
+                messageText.innerText =
+                    message;
+
+                messageText.style.flex =
+                    "1";
+
+                messageText.style.color =
+                    "white";
+
+
+                const deleteButton =
+                      document.createElement("button");
+
+                deleteButton.type =
+                    "button";
+
+                deleteButton.innerText =
+                    "X";
+
+                deleteButton.style.padding =
+                    "2px 6px";
+
+                deleteButton.style.cursor =
+                    "pointer";
+
+
+                deleteButton.addEventListener(
+                    "click",
+                    function () {
+
+                        const messages =
+                              JSON.parse(
+                                  localStorage.getItem(
+                                      MIC_GREETING_STORAGE_KEY
+                                  ) || "[]"
+                              );
+
+                        const index =
+                              messages.indexOf(message);
+
+                        if (index !== -1) {
+                            messages.splice(index, 1);
+                        }
+
+                        saveNewMicGreetingMessages(
+                            messages
+                        );
+
+                        loadNewMicGreetingMessages();
+                    }
+                );
+
+
+                item.appendChild(
+                    messageText
+                );
+
+                item.appendChild(
+                    deleteButton
+                );
+
+                micGreetingMessageList.appendChild(
+                    item
+                );
+            });
+        }
+
+
+        // ========================================
+        // ADD BUTTON
+        // ========================================
+
+        micGreetingMessageAddButton.addEventListener(
+            "click",
+            function () {
+
+                const message =
+                      micGreetingMessageInput.value.trim();
+
+                if (!message) return;
+
+
+                const messages =
+                      JSON.parse(
+                          localStorage.getItem(
+                              MIC_GREETING_STORAGE_KEY
+                          ) || "[]"
+                      );
+
+
+                messages.push(message);
+
+
+                saveNewMicGreetingMessages(
+                    messages
+                );
+
+
+                micGreetingMessageInput.value =
+                    "";
+
+
+                loadNewMicGreetingMessages();
+            }
+        );
+
+
+        // ========================================
+        // INITIAL LOAD
+        // ========================================
+
+        loadNewMicGreetingMessages();
+
 
         $(".volume-controls .ui-slider").slider("value", 0);
     }
@@ -3831,6 +4415,8 @@
         try {
             await createUI();
             initNewUserGreeting();
+            initNewMicGreeting();
+
         } catch (err) {
             console.error(err);
             setTimeout(init, 2000);
