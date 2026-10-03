@@ -1667,20 +1667,44 @@
 
         return result.trim();
     }
-
-    function findUserNickElement(nick) {
-        const target = String(nick || "").trim();
-
-        return [...document.querySelectorAll(".user-list .item .nick")]
-            .find(el => getFullNickToken(el) === target) || null;
-    }
-
     function getCurrentRoomUsers() {
-        return new Set(
-            getRoomItems()
-            .map(item => getFullNickToken(item.querySelector(".nick")))
-            .filter(Boolean)
+
+        const myNickEl = document.querySelector(".my-nick");
+
+        const myNick = myNickEl
+        ? getFullNickToken(myNickEl)
+        : "";
+
+        return getRoomItems()
+            .map(item => {
+
+            const nickEl = item.querySelector(".nick");
+
+            return {
+                fullNick: getFullNickToken(nickEl),
+                color: getNickColor(nickEl)
+            };
+        })
+            .filter(user =>
+                    user.fullNick !== myNick
+                   );
+    }
+    function getNickColor(nickEl) {
+        if (!nickEl) return null;
+
+        const color = nickEl.style.color;
+
+        const match = color.match(
+            /^rgb\(\s*(\d+),\s*(\d+),\s*(\d+)\s*\)$/
         );
+
+        if (!match) return null;
+
+        const [, r, g, b] = match;
+
+        return [r, g, b]
+            .map(v => Number(v).toString(16).padStart(2, "0")[0])
+            .join("");
     }
 
 
@@ -1690,33 +1714,43 @@
 
         // Lần đầu: chỉ ghi nhận người đang có trong room
         if (!newUserGreetingReady) {
-            previousRoomUsers = currentUsers;
+            previousRoomUsers = new Set(
+                currentUsers.map(user => user.fullNick)
+            );
+
             newUserGreetingReady = true;
             return;
         }
-
         // OFF → vẫn cập nhật danh sách user, nhưng không chào
         if (!newUserGreetingEnabled) {
-            previousRoomUsers = currentUsers;
+            previousRoomUsers = new Set(
+                currentUsers.map(user => user.fullNick)
+            );
+
             return;
         }
 
         // Tìm user mới
         const newUsers = [...currentUsers].filter(
-            nick => !previousRoomUsers.has(nick)
+            user => !previousRoomUsers.has(user.fullNick)
         );
 
-        previousRoomUsers = currentUsers;
+        // Snapshot mới vẫn chỉ lưu fullNick
+        previousRoomUsers = new Set(
+            currentUsers.map(user => user.fullNick)
+        );
 
         if (newUsers.length === 0) {
             return;
         }
 
-        // User mới → push vào queue
-        for (const nick of newUsers) {
+        // User mới → push object vào queue
+        for (const user of newUsers) {
 
-            if (!newUserGreetingQueue.includes(nick)) {
-                newUserGreetingQueue.push(nick);
+            if (!newUserGreetingQueue.some(
+                queued => queued.fullNick === user.fullNick
+            )) {
+                newUserGreetingQueue.push(user);
             }
         }
 
@@ -1826,10 +1860,15 @@
             .filter(item =>
                     item.querySelector(".info")?.innerText.trim() === "🎤"
                    )
-            .map(item =>
-                 getFullNickToken(item.querySelector(".nick"))
-                )
-            .filter(Boolean);
+            .map(item => {
+            const nickEl = item.querySelector(".nick");
+
+            return {
+                fullNick: getFullNickToken(nickEl),
+                color: getNickColor(nickEl)
+            };
+        })
+            .filter(user => user.fullNick);
     }
 
     function getQueueUsers() {
@@ -1839,10 +1878,15 @@
             item.querySelector(".info")?.innerText.trim() || ""
         )
                    )
-            .map(item =>
-                 getFullNickToken(item.querySelector(".nick"))
-                )
-            .filter(Boolean);
+            .map(item => {
+            const nickEl = item.querySelector(".nick");
+
+            return {
+                fullNick: getFullNickToken(nickEl),
+                color: getNickColor(nickEl)
+            };
+        })
+            .filter(user => user.fullNick);
     }
 
     function getReturnMicButton() {
@@ -2122,15 +2166,11 @@
 
         for (const user of users) {
 
-            const nickEl = findUserNickElement(user);
-
-            const fullNick = nickEl
-            ? getFullNickToken(nickEl)
-            : user;
+            const fullNick = user.fullNick;
+            const nickColor = user.color;
 
             console.log("👋 GREETING USER:", {
                 nick: user,
-                nickEl,
                 fullNick
             });
 
@@ -2698,9 +2738,16 @@
             : "";
 
             const users = [...getCurrentRoomUsers()]
-            .filter(name => name && name !== myNick);
+            .filter(user => user.fullNick !== myNick);
 
-            await sendGreeting(users);
+
+            const uniqueUsers = [
+                ...new Map(
+                    users.map(user => [user.fullNick, user])
+                ).values()
+            ];
+
+            await sendGreeting(uniqueUsers);
         };
 
         sendButton.insertAdjacentElement("afterend", botBtn);
@@ -2724,23 +2771,55 @@
                     ".chat-message:not(.mine) > span:first-child"
                 )
             ]
-            .map(e => getFullNickToken(e))
-            .filter(name => roomUsers.has(name));
-
+            .map(e => ({
+                fullNick: getFullNickToken(e),
+                color: getNickColor(e)
+            }))
+            .filter(user =>
+                    user.fullNick &&
+                    roomUsers.some(roomUser =>
+                                   roomUser.fullNick === user.fullNick
+                                  )
+                   );
             //   const roomItems = [...document.querySelectorAll(".user-list .item")];
             const micUsers = getMicUsers();
             const queueUsers = getQueueUsers();
 
 
 
-            const users = [...new Set([...micUsers, ...queueUsers, ...chatUsers])]
-            .filter(name => name && name !== myNick);
+            const users = [
+                ...micUsers,
+                ...queueUsers,
+                ...chatUsers
+            ]
+            .filter(user =>
+                    user.fullNick &&
+                    user.fullNick !== myNick
+                   );
 
-            log(`Users: ${users.join(", ")}`);
+            const uniqueUsers = [
+                ...new Map(
+                    users.map(user => [user.fullNick, user])
+                ).values()
+            ];
 
-            if (roomUsers.size > users.length + 1) users.push("all");
+            log(
+                `Users: ${uniqueUsers
+                .map(user => user.fullNick)
+                .join(", ")}`
+            );
 
-            await sendGreeting(users);
+            if (roomUsers.length > uniqueUsers.length) {
+                uniqueUsers.push({
+                    fullNick: "all",
+                    color: null
+                });
+            }
+
+            await sendGreeting(uniqueUsers);
+
+
+
         };
 
         sendButton.insertAdjacentElement("afterend", hiChatBtn);
