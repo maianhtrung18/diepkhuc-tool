@@ -2018,9 +2018,20 @@
                 if (selectAudio) {
                     if (selectedMicDeviceId) {
 
-                        const option = [...selectAudio.options].find(
-                            o => o.value === selectedMicDeviceId
-                        );
+                        // Chờ option mic xuất hiện trong select
+                        const start = Date.now();
+                        let option = null;
+
+                        while (Date.now() - start < 2000 && running) {
+
+                            option = [...selectAudio.options].find(
+                                o => o.value === selectedMicDeviceId
+                            );
+
+                            if (option) break;
+
+                            await delay(100);
+                        }
 
                         if (option) {
                             selectAudio.value = selectedMicDeviceId;
