@@ -1187,8 +1187,26 @@
         ? fancyTextEncode(text, fancyStyle)
         : text;
 
-        const textLength = [...text].length;
-        const textWidth = ctx.measureText(fancyText).width;
+        // ==========================================
+        // TEXT DÙNG ĐỂ TÍNH LENGTH / WIDTH
+        // Xóa nguyên nickname token:
+        // <[{[<nickname>]}]>
+        // ==========================================
+
+        const cleanText = text.replace(
+            /<\[\{\[<[\s\S]*?>\]\}\]>/g,
+            ''
+        );
+
+        const cleanFancyText =
+              fancyStyle !== "off"
+        ? fancyTextEncode(cleanText, fancyStyle)
+        : cleanText;
+
+        const textLength = [...cleanText].length;
+
+        const textWidth =
+              ctx.measureText(cleanFancyText).width;
 
         const MAX_CHAT_LENGTH = 160;
         const COLOR_CODE_LENGTH = 5;
