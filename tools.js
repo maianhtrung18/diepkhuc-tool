@@ -1109,29 +1109,61 @@
 
     window.fancyTextEncode = fancyTextEncode;
 
-    function rainbowEncodeUserChat(text) {
+    function rainbowEncodeUserChat(text, users = []) {
 
         text = text.trim();
         // Xóa các mã màu cũ nếu text đã được rainbow encode
         text = text.replace(/\[[0-9a-fA-F]{3}\]/g, '');
         // 🌈 RAINBOW OFF → dùng màu chat mặc định của trang
+        // 🌈 RAINBOW OFF
+        // 🌈 RAINBOW OFF
         if (!rainbowChatEnabled) {
+
             const colorInput = document.querySelector(
                 'input[type="color"]:not(#my-dkhd-toolbox input[type="color"])'
             );
 
+            let color3 = null;
+
             if (colorInput?.value) {
                 const hex = colorInput.value.replace("#", "");
 
-                const color3 =
-                      hex[0] +
-                      hex[2] +
-                      hex[4];
-
-                return `[${color3}]${text}`;
+                color3 =
+                    hex[0] +
+                    hex[2] +
+                    hex[4];
             }
-            console.debug("Trung", text)
-            return text;
+
+            const resolvedText = text.replace(
+                /<\[\{\[<([\s\S]*?)>\]\}\]>/g,
+                (match, fullNick) => {
+
+                    const user = users.find(
+                        user => user.fullNick === fullNick
+                    );
+
+                    if (!user) {
+                        return fullNick;
+                    }
+
+                    // Nickname có màu → giữ màu gốc của user
+                    if (user.color) {
+                        return `[${user.color}]${fullNick}[${color3}]`;
+                    }
+
+                    // user.color === null → dùng màu mặc định của chat
+                    return color3
+                        ? `[${color3}]${fullNick}`
+                    : fullNick;
+                }
+            );
+
+            // Text bình thường dùng màu mặc định của chat
+            if (color3) {
+                return `[${color3}]${resolvedText}`;
+            }
+
+            return resolvedText;
         }
 
 
@@ -1204,7 +1236,10 @@
         const colors = COLOR_STYLES[selectedStyle];
 
         if (!colors || colors.length === 0) {
-            return text;
+            return text.replace(
+                /<\[\{\[<([\s\S]*?)>\]\}\]>/g,
+                "$1"
+            );
         }
 
         let colorIndex = 0;
@@ -1214,6 +1249,91 @@
 
         for (let i = 0; i < chars.length; i++) {
             const char = chars[i];
+            const nickStart = "<[{[<";
+            const nickEnd = ">]}]>";
+
+            // Nickname token = một block nguyên vẹn
+            const remaining = chars.slice(i).join('');
+
+            if (remaining.startsWith(nickStart)) {
+
+                const end = remaining.indexOf(nickEnd, nickStart.length);
+
+                if (end !== -1) {
+
+                    const fullNick = remaining.slice(
+                        nickStart.length,
+                        end
+                    );
+
+                    const user = users.find(
+                        user => user.fullNick === fullNick
+                    );
+
+                    if (user) {
+
+                        // Chốt phần Rainbow phía trước nickname
+                        if (currentText || pendingSpaces) {
+
+                            const color = colors[colorIndex];
+                            const segmentText =
+                                  currentText + pendingSpaces;
+
+                            if (color !== currentColor) {
+                                result += `[${color}]`;
+                                currentColor = color;
+                            }
+
+                            result += segmentText;
+
+                            colorIndex =
+                                Math.min(
+                                colorIndex + 1,
+                                colors.length - 1
+                            );
+                        }
+
+                        currentText = '';
+                        pendingSpaces = '';
+
+                        // Nickname dùng màu gốc của user
+                        // Nickname có màu riêng → dùng màu gốc của user
+                        if (user.color) {
+
+                            if (user.color !== currentColor) {
+                                result += `[${user.color}]`;
+                                currentColor = user.color;
+                            }
+
+                        } else {
+
+                            // Không có màu → dùng màu Rainbow hiện tại
+                            const color = colors[colorIndex];
+
+                            if (color !== currentColor) {
+                                result += `[${color}]`;
+                                currentColor = color;
+                            }
+                        }
+
+                        result += fullNick;
+
+                        // Nickname kết thúc → Rainbow tiếp tục từ màu kế tiếp
+                        colorIndex = Math.min(
+                            colorIndex + 1,
+                            colors.length - 1
+                        );
+
+                        // Bỏ qua toàn bộ <[{[< ... >]}]>
+                        const tokenLength =
+                              [...remaining.slice(0, end + nickEnd.length)].length;
+
+                        i += tokenLength - 1;
+
+                        continue;
+                    }
+                }
+            }
 
             // Icon [...] = một block nguyên vẹn, giống như space
             const iconMatch = chars.slice(i).join('').match(/^\[[^\]]*\]/);
@@ -2168,6 +2288,7 @@
 
             const fullNick = user.fullNick;
             const nickColor = user.color;
+            const nickToken = `<[{[<${fullNick}>]}]>`;
 
             console.log("👋 GREETING USER:", {
                 nick: user,
@@ -2175,11 +2296,11 @@
             });
 
             const text = prefix.includes("@")
-            ? prefix.replace(/@/g, fullNick)
-            : `${prefix} ${fullNick}`;
+            ? prefix.replace(/@/g, nickToken)
+            : `${prefix} ${nickToken}`;
 
             // Kiểm tra riêng nickname này
-            const singleEncoded = rainbowEncodeUserChat(text);
+            const singleEncoded = rainbowEncodeUserChat(text, users);
 
             if (singleEncoded.length > MAX_LENGTH) {
                 alert(`Nội dung quá dài: ${text}`);
@@ -2196,7 +2317,7 @@
             // Thử thêm nickname vào message hiện tại
             const candidate = current + ", " + text;
 
-            const candidateEncoded = rainbowEncodeUserChat(candidate);
+            const candidateEncoded = rainbowEncodeUserChat(candidate, users);
 
             if (candidateEncoded.length <= MAX_LENGTH) {
 
@@ -2211,7 +2332,7 @@
 
                 // User này sang message mới
                 current = text;
-                currentEncoded = rainbowEncodeUserChat(current);
+                currentEncoded = rainbowEncodeUserChat(current, users);
             }
         }
 
