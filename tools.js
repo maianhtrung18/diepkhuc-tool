@@ -125,7 +125,7 @@
 
         /* Chỗ để sau này nhét các nút */
        #my-dkhd-toolbox .toolbox-content {
-    width: 100%t;
+    width: 100%;
     min-width: 100%;
     box-sizing: border-box;
 
