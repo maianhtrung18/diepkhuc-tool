@@ -1691,26 +1691,86 @@
     }
 
 
+    function splitMessage(message, maxLength) {
+
+        const chunks = [];
+
+        while (message.length > maxLength) {
+
+            let cutIndex = message.lastIndexOf(" ", maxLength);
+
+            // Không có khoảng trắng thì cắt cứng
+            if (cutIndex <= 0) {
+                cutIndex = maxLength;
+            }
+
+            const chunk = message
+            .slice(0, cutIndex)
+            .trim();
+
+            if (chunk) {
+                chunks.push(chunk);
+            }
+
+            message = message
+                .slice(cutIndex)
+                .trim();
+        }
+
+        if (message) {
+            chunks.push(message);
+        }
+
+        return chunks;
+    }
+
     function manualPublicSend(message) {
 
         if (!message) return false;
 
+        // Xuống dòng → khoảng trắng
+        message = message
+            .replace(/\r?\n/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        // Rainbow ON  → 130 ký tự
+        // Rainbow OFF → 155 ký tự
+        const maxLength = rainbowChatEnabled
+        ? 130
+        : 155;
+
+        const chunks = splitMessage(
+            message,
+            maxLength
+        );
+
+        console.log(
+            `✂️ MANUAL PUBLIC SPLIT (${maxLength}):`,
+            chunks
+        );
+
         return new Promise((resolve, reject) => {
 
-            manualSendQueue.push({
-                message,
-                resolve,
-                reject
-            });
+            for (const chunk of chunks) {
+
+                manualSendQueue.push({
+                    message: chunk,
+                    resolve,
+                    reject
+                });
+
+            }
 
             console.log(
-                `📥 MANUAL PUBLIC QUEUE: ${manualSendQueue.length}`,
-                message
+                `📥 MANUAL PUBLIC QUEUE: ${manualSendQueue.length}`
             );
 
             processManualSendQueue();
         });
     }
+
+
 
     async function waitForElement(selector, timeout = 5000) {
         const start = Date.now();
