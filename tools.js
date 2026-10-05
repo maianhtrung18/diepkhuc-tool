@@ -25,6 +25,7 @@
     let autoCommentStyle = "off";
     let autoCommentMin = 1;
     let autoCommentMax = 3;
+    const AUTO_COMMENT_MEDIA_KEY = "dk_auto_comment_media";
 
     let commentDelayInput = null;
     let commentTimeout = null;
@@ -278,7 +279,7 @@
     }
 
     addToolbox();
-
+    initAutoCommentMediaCapture();
 
     // ===============================
     // MỞ / THU
@@ -507,9 +508,45 @@
     }
 
 
-    //////////////////////////////////////////////////////
-    // 🌈 RAINBOW COLORS
-    //////////////////////////////////////////////////////
+    function initAutoCommentMediaCapture() {
+
+        document.addEventListener("click", (event) => {
+
+            const item = event.target.closest(
+                ".smiley-list .image-or-video"
+            );
+
+            if (!item) return;
+
+            const media = item.querySelector("img, video");
+
+            if (!media) return;
+
+            const url = media.currentSrc || media.src;
+
+            if (!url) return;
+
+            const token = mediaElementToToken(media);
+
+            if (!token) return;
+
+            const items = JSON.parse(
+                localStorage.getItem(AUTO_COMMENT_MEDIA_KEY) || "[]"
+            );
+
+            items.push({
+                url,
+                token
+            });
+
+            localStorage.setItem(
+                AUTO_COMMENT_MEDIA_KEY,
+                JSON.stringify(items)
+            );
+
+            //       loadAutoCommentMediaUI();
+        });
+    }
 
     //////////////////////////////////////////////////////
     // 🌈 RAINBOW COLORS
@@ -2353,10 +2390,6 @@
     async function autoCommentLoop() {
         while (autoCommentRunning) {
             try {
-                if (!chatTextarea) {
-                    await delay(1000);
-                    continue;
-                }
 
                 // Kiểm tra có người đang ON MIC không
                 const micUsers = getMicUsers();
@@ -2366,6 +2399,25 @@
 
                     // Không gửi comment, chỉ chờ rồi kiểm tra lại
                     await commentSleep(10000);
+
+                    if (!autoCommentRunning) break;
+                    continue;
+                }
+
+                // Lấy media từ localStorage
+                const mediaItems = JSON.parse(
+                    localStorage.getItem(AUTO_COMMENT_MEDIA_KEY) || "[]"
+                );
+
+                // Chuyển token trong localStorage thành một chuỗi
+                autoCommentMessage = mediaItems
+                    .map(item => item.token)
+                    .join("");
+
+                if (!autoCommentMessage) {
+                    log("Auto Comment: Chưa có media");
+
+                    await commentSleep(1000);
 
                     if (!autoCommentRunning) break;
                     continue;
@@ -3417,17 +3469,16 @@
             autoCommentRunning = !autoCommentRunning;
 
             if (autoCommentRunning) {
-                autoCommentMessage = chatTextarea?.value.trim() || "";
+                // Kiểm tra có media/token trong localStorage không
+                const mediaItems = JSON.parse(
+                    localStorage.getItem(AUTO_COMMENT_MEDIA_KEY) || "[]"
+                );
 
-                if (!autoCommentMessage) {
-                    alert("Vui lòng nhập nội dung chat trước");
+                if (!mediaItems.some(item => item.token)) {
+                    alert("Chưa có media nào để Auto Comment");
                     autoCommentRunning = false;
                     return;
                 }
-
-                // Lưu nội dung Auto Cmt xong → trả textarea cho người dùng
-                chatTextarea.value = "";
-                chatTextarea.dispatchEvent(new Event("input", { bubbles: true }));
 
                 autoCommentBtn.innerText = "Auto Cmt ON";
                 autoCommentBtn.style.background = "red";
@@ -3680,24 +3731,18 @@
             row1.appendChild(btn);
 
 
-            // Hàng 2: Auto Cmt + textbox
+            // Hàng 2: Auto Cmt + Delay + Style + Min + Max
             const row2 = document.createElement("div");
             row2.className = "toolbox-row";
 
             row2.appendChild(autoCommentBtn);
             row2.appendChild(commentDelayInput);
-
-
-            const row2Style = document.createElement("div");
-            row2Style.className = "toolbox-row";
-
-            row2Style.appendChild(autoCommentStyleSelect);
-            row2Style.appendChild(autoCommentMinInput);
-            row2Style.appendChild(autoCommentMaxInput);
+            row2.appendChild(autoCommentStyleSelect);
+            row2.appendChild(autoCommentMinInput);
+            row2.appendChild(autoCommentMaxInput);
 
             toolboxContent.appendChild(row1);
             toolboxContent.appendChild(row2);
-            toolboxContent.appendChild(row2Style);
 
 
             const rainbowRow = document.createElement("div");
@@ -3909,18 +3954,30 @@
             toolboxContent.appendChild(rainbowRow);
         }
 
-        const autoYieldCheckbox = document.createElement("input");
+        const autoYieldSwitch = document.createElement("button");
 
-        autoYieldCheckbox.type = "checkbox";
-        autoYieldCheckbox.checked = autoYieldMic;
+        autoYieldSwitch.type = "button";
+        autoYieldSwitch.className = "audio-switch";
 
-        autoYieldCheckbox.onchange = () => {
-            autoYieldMic = autoYieldCheckbox.checked;
+        autoYieldSwitch.classList.toggle("on", autoYieldMic);
+
+        autoYieldSwitch.onclick = () => {
+
+            autoYieldMic = !autoYieldMic;
+
+            autoYieldSwitch.classList.toggle(
+                "on",
+                autoYieldMic
+            );
 
             if (!autoYieldMic) {
                 waitMode = false;
                 log("Auto Yield OFF -> Exit wait mode");
             }
+
+            log(
+                `Auto Yield ${autoYieldMic ? "ON" : "OFF"}`
+            );
         };
 
         const autoYieldText = document.createElement("label");
@@ -3929,9 +3986,9 @@
 
         const row3 = document.createElement("div");
         row3.className = "toolbox-row";
-        row3.appendChild(autoYieldText);
-        row3.appendChild(autoYieldCheckbox);
 
+        row3.appendChild(autoYieldText);
+        row3.appendChild(autoYieldSwitch);
 
         toolboxContent.appendChild(row3);
 
