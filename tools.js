@@ -149,7 +149,6 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    width: max-content;
     min-width: 100%;
 }
 
@@ -229,6 +228,40 @@
         .audio-switch.on::before {
             transform: translateX(18px);
         }
+
+        #dk-auto-comment-media-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+    padding: 4px 0;
+    box-sizing: border-box;
+    min-height: 40px;
+    max-height: 110px;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+}
+
+#dk-auto-comment-media-list .auto-comment-media-item {
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    background: #222;
+    border: 1px solid rgba(255,255,255,0.15);
+}
+
+#dk-auto-comment-media-list .auto-comment-media-item img,
+#dk-auto-comment-media-list .auto-comment-media-item video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
     `;
 
 
@@ -543,8 +576,74 @@
                 AUTO_COMMENT_MEDIA_KEY,
                 JSON.stringify(items)
             );
+            loadAutoCommentMediaUI();
 
-            //       loadAutoCommentMediaUI();
+            loadAutoCommentMediaUI();
+        });
+    }
+
+    function loadAutoCommentMediaUI() {
+
+        const container = document.getElementById(
+            "dk-auto-comment-media-list"
+        );
+
+        if (!container) return;
+
+        // Xóa UI cũ
+        container.innerHTML = "";
+
+        const items = JSON.parse(
+            localStorage.getItem(AUTO_COMMENT_MEDIA_KEY) || "[]"
+        );
+
+        items.forEach((item, index) => {
+
+            if (!item?.url) return;
+
+            const mediaItem = document.createElement("div");
+
+            mediaItem.className =
+                "auto-comment-media-item";
+
+            let media;
+
+            if (
+                item.url.toLowerCase().includes(".mp4") ||
+                item.url.toLowerCase().includes(".webm") ||
+                item.token?.startsWith("[v:")
+            ) {
+
+                media = document.createElement("video");
+
+                media.src = item.url;
+                media.muted = true;
+                media.loop = true;
+                media.autoplay = true;
+                media.playsInline = true;
+
+            } else {
+
+                media = document.createElement("img");
+
+                media.src = item.url;
+            }
+            mediaItem.onclick = () => {
+                const items = JSON.parse(
+                    localStorage.getItem(AUTO_COMMENT_MEDIA_KEY) || "[]"
+                );
+
+                items.splice(index, 1);
+
+                localStorage.setItem(
+                    AUTO_COMMENT_MEDIA_KEY,
+                    JSON.stringify(items)
+                );
+
+                loadAutoCommentMediaUI();
+            };
+            mediaItem.appendChild(media);
+            container.appendChild(mediaItem);
         });
     }
 
@@ -3744,7 +3843,17 @@
             toolboxContent.appendChild(row1);
             toolboxContent.appendChild(row2);
 
+            const autoCommentMediaRow = document.createElement("div");
+            autoCommentMediaRow.className = "toolbox-row";
 
+            const autoCommentMediaList = document.createElement("div");
+            autoCommentMediaList.id = "dk-auto-comment-media-list";
+
+            autoCommentMediaRow.appendChild(autoCommentMediaList);
+
+            toolboxContent.appendChild(autoCommentMediaRow);
+
+            loadAutoCommentMediaUI();
             const rainbowRow = document.createElement("div");
             rainbowRow.className = "toolbox-row";
 
