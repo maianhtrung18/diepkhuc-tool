@@ -22,7 +22,7 @@
     let autoCommentRunning = false;
     let autoCommentTask = null;
     let autoCommentMessage = "";
-    let autoCommentStyle = "off";
+    let autoCommentStyle = "random";
     let autoCommentMin = 1;
     let autoCommentMax = 3;
     const AUTO_COMMENT_MEDIA_KEY = "dk_auto_comment_media";
@@ -578,8 +578,6 @@
                 JSON.stringify(items)
             );
             loadAutoCommentMediaUI();
-
-            loadAutoCommentMediaUI();
         });
     }
 
@@ -647,6 +645,16 @@
             container.appendChild(mediaItem);
         });
     }
+    window.addEventListener("storage", (event) => {
+
+        if (event.key !== AUTO_COMMENT_MEDIA_KEY) {
+            return;
+        }
+
+        // Có tab khác thay đổi danh sách media
+        loadAutoCommentMediaUI();
+
+    });
 
     //////////////////////////////////////////////////////
     // 🌈 RAINBOW COLORS
