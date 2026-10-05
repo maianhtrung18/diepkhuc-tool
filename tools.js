@@ -551,7 +551,8 @@
 
             if (!item) return;
 
-            const media = item.querySelector("img, video");
+            const media = [...item.querySelectorAll("img, video")]
+            .find(el => getComputedStyle(el).display !== "none");
 
             if (!media) return;
 
@@ -1965,6 +1966,22 @@
         const src = media.currentSrc || media.src;
         if (!src) return null;
 
+        // ===============================
+        // USER ICON
+        // ===============================
+        const userIconMatch = src.match(
+            /\/userIcon\/([a-fA-F0-9]{32})/
+        );
+
+        if (userIconMatch) {
+            const hash = userIconMatch[1];
+
+            return `[i:U,${hash.slice(0, 4)},0]`;
+        }
+
+        // ===============================
+        // SMILEY
+        // ===============================
         const match = src.match(
             /\/smileys\/([^/]+)\/(\d+)(\.[^/?#]+)/
         );
@@ -1978,11 +1995,12 @@
 
         if (!iconSet) return null;
 
-        const type = ext.toLowerCase() === ".mp4" ? "v" : "i";
+        const type = ext.toLowerCase() === ".mp4"
+        ? "v"
+        : "i";
 
         return `[${type}:${iconSet.id},${file},0]`;
     }
-
     function getFullNickToken(nickEl) {
         if (!nickEl) return "";
 
