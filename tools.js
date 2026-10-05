@@ -2023,7 +2023,22 @@
 
     function mediaElementToToken(media) {
         const src = media.currentSrc || media.src;
+
         if (!src) return null;
+
+        // ===============================
+        // HUE ROTATE
+        // ===============================
+        const filter = media.style?.filter || "";
+
+        const hueMatch = filter.match(
+            /hue-rotate\(\s*(-?\d+(?:\.\d+)?)deg\s*\)/i
+        );
+
+        const hue = hueMatch
+        ? Number(hueMatch[1])
+        : 0;
+
 
         // ===============================
         // USER ICON
@@ -2035,8 +2050,9 @@
         if (userIconMatch) {
             const hash = userIconMatch[1];
 
-            return `[i:U,${hash.slice(0, 4)},0]`;
+            return `[i:U,${hash.slice(0, 4)},${hue}]`;
         }
+
 
         // ===============================
         // SMILEY
@@ -2058,7 +2074,7 @@
         ? "v"
         : "i";
 
-        return `[${type}:${iconSet.id},${file},0]`;
+        return `[${type}:${iconSet.id},${file},${hue}]`;
     }
     function getFullNickToken(nickEl) {
         if (!nickEl) return "";
