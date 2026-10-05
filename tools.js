@@ -568,6 +568,12 @@
                 localStorage.getItem(AUTO_COMMENT_MEDIA_KEY) || "[]"
             );
 
+            // Không cho phép token trùng
+            if (items.some(item => item?.token === token)) {
+                loadAutoCommentMediaUI();
+                return;
+            }
+
             items.push({
                 url,
                 token
@@ -596,7 +602,30 @@
             localStorage.getItem(AUTO_COMMENT_MEDIA_KEY) || "[]"
         );
 
-        items.forEach((item, index) => {
+        const uniqueItems = [];
+        const tokenSet = new Set();
+
+        for (const item of items) {
+
+            if (!item?.token) continue;
+
+            if (tokenSet.has(item.token)) {
+                continue;
+            }
+
+            tokenSet.add(item.token);
+            uniqueItems.push(item);
+        }
+
+        if (uniqueItems.length !== items.length) {
+
+            localStorage.setItem(
+                AUTO_COMMENT_MEDIA_KEY,
+                JSON.stringify(uniqueItems)
+            );
+        }
+
+        uniqueItems.forEach((item, index) => {
 
             if (!item?.url) return;
 
