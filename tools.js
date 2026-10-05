@@ -647,12 +647,34 @@
     }
     window.addEventListener("storage", (event) => {
 
-        if (event.key !== AUTO_COMMENT_MEDIA_KEY) {
-            return;
+        // ==============================
+        // AUTO COMMENT MEDIA
+        // ==============================
+        if (event.key === AUTO_COMMENT_MEDIA_KEY) {
+
+            loadAutoCommentMediaUI();
+
         }
 
-        // Có tab khác thay đổi danh sách media
-        loadAutoCommentMediaUI();
+
+        // ==============================
+        // NEW MEMBER GREETING
+        // ==============================
+        if (event.key === GREETING_STORAGE_KEY) {
+
+            window.loadNewUserGreetingMessages();
+
+        }
+
+
+        // ==============================
+        // NEW MIC GREETING
+        // ==============================
+        if (event.key === MIC_GREETING_STORAGE_KEY) {
+
+            window.loadNewMicGreetingMessages();
+
+        }
 
     });
 
@@ -4286,6 +4308,8 @@
                 greetingMessageList.appendChild(item);
             });
         }
+        window.loadNewUserGreetingMessages =
+            loadNewUserGreetingMessages;
 
         let greetingShufflePool = [];
 
@@ -4651,7 +4675,8 @@
             });
         }
 
-
+        window.loadNewMicGreetingMessages =
+            loadNewMicGreetingMessages;
         // ========================================
         // ADD BUTTON
         // ========================================
