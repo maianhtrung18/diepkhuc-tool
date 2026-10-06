@@ -2076,6 +2076,17 @@
 
         return `[${type}:${iconSet.id},${file},${hue}]`;
     }
+
+    function htmlToToken(html) {
+        const div = document.createElement("div");
+        div.innerHTML = html.trim();
+
+        const media = div.querySelector("img, video");
+
+        return mediaElementToToken(media);
+    }
+    window.htmlToToken = htmlToToken;
+
     function getFullNickToken(nickEl) {
         if (!nickEl) return "";
 
@@ -2946,7 +2957,7 @@
         const micUsers = getMicUsers();
 
         if (micUsers.length > 0) {
-            return micUsers[0];
+            return micUsers[0].fullNick;
         }
 
         return "Unknown";
