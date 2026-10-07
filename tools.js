@@ -1819,7 +1819,7 @@
             try {
 
                 // Rainbow chỉ encode ngay trước khi gửi
-                const sendMessage = rainbowEncodeUserChat(item.message);
+                const sendMessage = rainbowEncodeUserChat(item.message, getCurrentRoomUsers());
 
                 console.log(
                     "📤 MANUAL PUBLIC SEND:",
@@ -2126,9 +2126,8 @@
         ? getFullNickToken(myNickEl)
         : "";
 
-        return getRoomItems()
-            .map(item => {
-
+        const users = getRoomItems()
+        .map(item => {
             const nickEl = item.querySelector(".nick");
 
             return {
@@ -2136,9 +2135,15 @@
                 color: getNickColor(nickEl)
             };
         })
-            .filter(user =>
-                    user.fullNick !== myNick
-                   );
+        .filter(user =>
+                user.fullNick !== myNick
+               );
+
+        return [
+            ...new Map(
+                users.map(user => [user.fullNick, user])
+            ).values()
+        ];
     }
     function getNickColor(nickEl) {
         if (!nickEl) return null;
@@ -2334,6 +2339,79 @@
                    );
     }
 
+    function getUserFromAvatarClick(event) {
+
+        const avatar =
+              event.target.closest(".user-list .avatar, .user-list .leading-badge");
+
+        if (!avatar) return null;
+
+        const item =
+              avatar.closest(".item");
+
+        if (!item) return null;
+
+        const nickEl =
+              item.querySelector(".nick");
+
+        if (!nickEl) return null;
+
+        return {
+            fullNick: getFullNickToken(nickEl),
+            color: getNickColor(nickEl)
+        };
+    }
+
+    window.getUserFromAvatarClick = getUserFromAvatarClick;
+
+    function addContextMenuItem(user) {
+        let strFullNick = "Copy Nick";
+
+        const ul = document.querySelector(
+            ".user-context-menu ul.menu"
+        );
+
+        if (!ul) return;
+
+        let li = [...ul.querySelectorAll("li")]
+        .find(li => li.textContent.trim() === strFullNick);
+
+        // Nếu Copy Nick chưa có thì tạo mới
+        if (!li) {
+            li = document.createElement("li");
+
+            const img = document.createElement("img");
+            img.src = "/images/question_mark_18x18.jpg";
+
+            li.appendChild(img);
+            li.appendChild(document.createTextNode(" " + strFullNick));
+
+            ul.prepend(li);
+        }
+
+        // Luôn cập nhật user mới nhất
+        li.onclick = function () {
+            chatTextarea.value += `${user.fullNick}`;
+            // Đóng menu
+            li.closest(".user-context-menu")?.style.setProperty("display", "none");
+
+        };
+    }
+
+
+
+
+    document.addEventListener("click", function (event) {
+
+        const user = getUserFromAvatarClick(event);
+
+        if (!user) return;
+
+        setTimeout(() => {
+            addContextMenuItem(user);
+        }, 0);
+
+    }, true);
     // ========================================
     // NEW MIC GREETING
     // ========================================
@@ -3331,14 +3409,43 @@
         // Public  -> Rainbow -> Public Queue
         // Private -> Rainbow -> Private RPC
         // ============================================================
+
+        function wrapNicknamesWithTokens(message, users) {
+            if (!message || !users?.length) {
+                return message;
+            }
+
+            // Nick dài hơn xử lý trước để tránh bị nick ngắn chui vào nick dài
+            const sortedUsers = [...users]
+            .filter(user => user?.fullNick)
+            .sort((a, b) => b.fullNick.length - a.fullNick.length);
+
+            for (const user of sortedUsers) {
+                const fullNick = user.fullNick;
+
+                if (!message.includes(fullNick)) {
+                    continue;
+                }
+
+                const token = `<[{[<${fullNick}>]}]>`;
+
+                message = message.split(fullNick).join(token);
+            }
+
+            return message;
+        }
         async function handleManualSend() {
             const message = chatTextarea?.value?.trim();
             if (!message) return;
 
+            const users = [...getCurrentRoomUsers()];
+
+            const wrappedMessage = wrapNicknamesWithTokens(message, users);
+
             const selectedTab = window.chatWindow?.selectedTab ?? 0;
 
             console.log("🌈 MANUAL SEND", {
-                message,
+                wrappedMessage,
                 selectedTab
             });
 
@@ -3347,7 +3454,7 @@
                 console.log("🌐 MANUAL PUBLIC");
 
                 // Vào queue ngay, không chờ gửi xong
-                manualPublicSend(message);
+                manualPublicSend(wrappedMessage);
 
                 // Xóa ô nhập ngay
                 chatTextarea.value = "";
@@ -3367,11 +3474,11 @@
             }
 
             const userId = String(tab.userInfo.userId);
-            const encodedMessage = rainbowEncodeUserChat(message);
+            const encodedMessage = rainbowEncodeUserChat(wrappedMessage, users);
 
             console.log("🔒 MANUAL PRIVATE SEND:", {
                 userId,
-                message,
+                wrappedMessage,
                 encodedMessage
             });
 
