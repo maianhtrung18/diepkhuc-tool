@@ -15,7 +15,156 @@
     const TARGET_FPS = 60;
     const TARGET_BITRATE = 12_000_000;
 
+    const VIDEO_QUALITY_KEY = 'dk-video-quality';
+
+    let currentWidth = TARGET_WIDTH;
+    let currentHeight = TARGET_HEIGHT;
+    let currentFps = TARGET_FPS;
+
     console.log('[DK 4K8M] 🚀 Loaded');
+
+    function loadVideoQuality() {
+
+        try {
+
+            const saved =
+                  JSON.parse(
+                      localStorage.getItem(VIDEO_QUALITY_KEY)
+                  );
+
+            if (
+                saved &&
+                Number.isFinite(saved.width) &&
+                Number.isFinite(saved.height) &&
+                Number.isFinite(saved.fps)
+            ) {
+                currentWidth = saved.width;
+                currentHeight = saved.height;
+                currentFps = saved.fps;
+            }
+
+        } catch (err) {
+
+            console.warn(
+                '[DK 4K8M] ⚠️ Load video quality failed:',
+                err
+            );
+        }
+
+        console.log(
+            '[DK 4K8M] 🎥 VIDEO CONFIG:',
+            currentWidth,
+            currentHeight,
+            currentFps
+        );
+    }
+
+    function saveVideoQuality() {
+
+        localStorage.setItem(
+            VIDEO_QUALITY_KEY,
+            JSON.stringify({
+                width: currentWidth,
+                height: currentHeight,
+                fps: currentFps
+            })
+        );
+    }
+
+    async function setVideoQuality(width, height, fps) {
+
+        const pcs =
+              window.__dkPeerConnections || [];
+
+        for (const pc of pcs) {
+
+            // Bỏ qua PeerConnection của room cũ
+            if (pc.connectionState !== 'connected') {
+                continue;
+            }
+
+            const sender =
+                  pc.getSenders().find(
+                      sender =>
+                      sender.track &&
+                      sender.track.kind === 'video' &&
+                      sender.track.readyState === 'live'
+                  );
+
+            if (!sender) {
+                continue;
+            }
+
+            const track = sender.track;
+
+            try {
+
+                await track.applyConstraints({
+
+                    width: {
+                        ideal: width,
+                        max: width
+                    },
+
+                    height: {
+                        ideal: height,
+                        max: height
+                    },
+
+                    frameRate: {
+                        ideal: fps,
+                        max: fps
+                    }
+
+                });
+
+                const params = sender.getParameters();
+
+                if (params.encodings && params.encodings.length) {
+                    for (const encoding of params.encodings) {
+                        encoding.maxFramerate = fps;
+                    }
+
+                    await sender.setParameters(params);
+                }
+
+                const settings =
+                      track.getSettings();
+
+                console.log(
+                    '[DK 4K8M] 🎥 VIDEO QUALITY:',
+                    JSON.stringify({
+                        requested: {
+                            width,
+                            height,
+                            fps
+                        },
+                        actual: {
+                            width: settings.width,
+                            height: settings.height,
+                            fps: settings.frameRate
+                        }
+                    }, null, 2)
+                );
+
+            } catch (err) {
+
+                console.error(
+                    '[DK 4K8M] ❌ setVideoQuality:',
+                    err
+                );
+
+                // PC này lỗi → bỏ qua, thử PC tiếp theo
+                continue;
+            }
+
+            return;
+        }
+
+        console.warn(
+            '[DK 4K8M] ⚠️ No video sender found'
+        );
+    }
 
     // =========================================================
     // 1. FORCE Janus getUserMedia:
@@ -49,18 +198,18 @@
                     ...video,
 
                     width: {
-                        ideal: TARGET_WIDTH,
-                        max: TARGET_WIDTH
+                        ideal: currentWidth,
+                        max: currentWidth
                     },
 
                     height: {
-                        ideal: TARGET_HEIGHT,
-                        max: TARGET_HEIGHT
+                        ideal: currentHeight,
+                        max: currentHeight
                     },
 
                     frameRate: {
-                        ideal: TARGET_FPS,
-                        max: TARGET_FPS
+                        ideal: currentFps,
+                        max: currentFps
                     }
                 }
             };
@@ -144,8 +293,7 @@
                 encoding.maxBitrate =
                     TARGET_BITRATE;
 
-                encoding.maxFramerate =
-                    TARGET_FPS;
+                encoding.maxFramerate = currentFps;
 
                 encoding.scaleResolutionDownBy = 1;
             }
@@ -195,7 +343,297 @@
         }
     }
 
+    function createVideoQualityUI() {
 
+        if (document.querySelector('#dk-quality-panel')) {
+            return;
+        }
+
+        const panel =
+              document.createElement('div');
+
+        panel.id = 'dk-quality-panel';
+
+        panel.innerHTML = `
+        <div class="dk-quality-row">
+
+            <label>
+                R
+               <select id="dk-resolution">
+    <option value="3840x2160">3840 × 2160</option>
+    <option value="3200x1800">3200 × 1800</option>
+    <option value="2560x1440">2560 × 1440</option>
+    <option value="1920x1080">1920 × 1080</option>
+    <option value="1600x900">1600 × 900</option>
+    <option value="1280x720">1280 × 720</option>
+    <option value="960x540">960 × 540</option>
+    <option value="854x480">854 × 480</option>
+    <option value="640x360">640 × 360</option>
+    <option value="426x240">426 × 240</option>
+    <option value="320x180">320 × 180</option>
+    <option value="256x144">256 × 144</option>
+    <option value="160x90">160 × 90</option>
+</select>
+            </label>
+
+            <label>
+                FPS
+                <select id="dk-fps">
+    <option value="60">60</option>
+    <option value="50">50</option>
+    <option value="40">40</option>
+    <option value="30">30</option>
+    <option value="25">25</option>
+    <option value="24">24</option>
+    <option value="20">20</option>
+    <option value="15">15</option>
+    <option value="10">10</option>
+    <option value="5">5</option>
+</select>
+            </label>
+
+            <div id="dk-limit-status">
+                <span id="dk-limit-light"></span>
+               
+            </div>
+
+        </div>
+    `;
+
+        const insertPanel = () => {
+
+            const liveListener = document.querySelector(
+                '[data-class="LiveListener"].live-listener'
+            );
+
+            if (!liveListener) {
+                return false;
+            }
+
+            const videoContainer =
+                  liveListener.querySelector('.overflow-hidden');
+
+
+            if (!videoContainer) {
+                return false;
+            }
+
+            videoContainer.insertAdjacentElement(
+                'afterend',
+                panel
+            );
+
+            return true;
+        };
+
+
+        const initVideoQualityControls = () => {
+
+            const resolution =
+                  panel.querySelector('#dk-resolution');
+
+            const fps =
+                  panel.querySelector('#dk-fps');
+
+            if (!resolution || !fps) {
+                return;
+            }
+
+            resolution.value =
+                `${currentWidth}x${currentHeight}`;
+
+            fps.value =
+                String(currentFps);
+
+            resolution.addEventListener('change', () => {
+
+                const [width, height] =
+                      resolution.value.split('x').map(Number);
+
+                currentWidth = width;
+                currentHeight = height;
+
+                saveVideoQuality();
+
+                setVideoQuality(
+                    currentWidth,
+                    currentHeight,
+                    currentFps
+                );
+            });
+
+            fps.addEventListener('change', () => {
+
+                currentFps =
+                    Number(fps.value);
+
+                saveVideoQuality();
+
+                setVideoQuality(
+                    currentWidth,
+                    currentHeight,
+                    currentFps
+                );
+            });
+        };
+
+
+        if (!insertPanel()) {
+
+            const observer = new MutationObserver(() => {
+
+                if (insertPanel()) {
+
+                    observer.disconnect();
+
+                    initVideoQualityControls();
+                }
+
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+
+        } else {
+
+            initVideoQualityControls();
+        }
+
+        const style =
+              document.createElement('style');
+
+        style.textContent = `
+#dk-quality-panel {
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    font-size: 12px;
+    border-radius: 6px;
+}
+
+        .dk-quality-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            white-space: nowrap;
+        }
+
+        .dk-quality-row label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .dk-quality-row select {
+            background: #222;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 3px 5px;
+        }
+
+        #dk-limit-status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: bold;
+        }
+
+        #dk-limit-light {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            display: inline-block;
+            background: #22c55e;
+        }
+
+        #dk-limit-light.limited {
+            background: #ef4444;
+            box-shadow: 0 0 7px #ef4444;
+        }
+    `;
+
+        document.head.appendChild(style);
+
+        const resolution =
+              panel.querySelector('#dk-resolution');
+
+        const fps =
+              panel.querySelector('#dk-fps');
+
+        // UI lấy từ local
+        resolution.value =
+            `${currentWidth}x${currentHeight}`;
+
+        fps.value =
+            String(currentFps);
+
+        // Resolution thay đổi
+        resolution.addEventListener(
+            'change',
+            () => {
+
+                const [
+                    width,
+                    height
+                ] = resolution.value
+                .split('x')
+                .map(Number);
+
+                currentWidth = width;
+                currentHeight = height;
+
+                saveVideoQuality();
+
+                setVideoQuality(
+                    currentWidth,
+                    currentHeight,
+                    currentFps
+                );
+            }
+        );
+
+        // FPS thay đổi
+        fps.addEventListener(
+            'change',
+            () => {
+
+                currentFps =
+                    Number(fps.value);
+
+                saveVideoQuality();
+
+                setVideoQuality(
+                    currentWidth,
+                    currentHeight,
+                    currentFps
+                );
+            }
+        );
+    }
+
+    function updateLimitLight(reason) {
+
+        const light =
+              document.querySelector(
+                  '#dk-limit-light'
+              );
+
+        if (!light) {
+            return;
+        }
+
+        light.classList.toggle(
+            'limited',
+            reason &&
+            reason !== 'none'
+        );
+    }
     // =========================================================
     // 3. Trace addTrack + createOffer + setLocalDescription
     // =========================================================
@@ -237,6 +675,19 @@
 
             const sender =
                   originalAddTrack(track, ...streams);
+
+            if (track.kind === 'video') {
+
+                setTimeout(() => {
+
+                    setVideoQuality(
+                        currentWidth,
+                        currentHeight,
+                        currentFps
+                    );
+
+                }, 100);
+            }
 
             if (track.kind === 'video') {
 
@@ -367,7 +818,9 @@
                           const codec = report.codecId
                           ? stats.get(report.codecId)
                           : null;
-
+                          updateLimitLight(
+                              report.qualityLimitationReason
+                          );
                           console.log(
                               '[DK 4K8M] 📊 OUTBOUND CHECK',
                               check,
@@ -422,6 +875,12 @@
 
         const pc =
               new OriginalPC(...args);
+
+        if (!window.__dkPeerConnections) {
+            window.__dkPeerConnections = [];
+        }
+
+        window.__dkPeerConnections.push(pc);
 
         return tracePC(pc);
     }
@@ -501,7 +960,20 @@
         );
     };
 
+    loadVideoQuality();
 
+    if (document.body) {
+
+        createVideoQualityUI();
+
+    } else {
+
+        document.addEventListener(
+            'DOMContentLoaded',
+            createVideoQualityUI,
+            { once: true }
+        );
+    }
     console.log(
         '[DK 4K8M] ✅ All hooks installed'
     );
