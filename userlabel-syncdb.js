@@ -31,12 +31,17 @@
         dbStatus = status;
 
         const panel = document.getElementById("dk-workspace-panel");
+        const selectOption = document.getElementById("dk-workspace-combobox");
+
         if (!panel) return;
 
         if (status === "error") {
             panel.style.background = "#FF1744"; // đỏ rất rõ
+            selectOption.style.background = "#FF1744"; // đỏ rất rõ
         } else {
             panel.style.background = "";
+            selectOption.style.background = "#FFFFFF"; // đỏ rất rõ
+
         }
     }
 
