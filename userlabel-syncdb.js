@@ -25,6 +25,22 @@
     const pendingRecords = {};
     const activeUsers = {};
     const updateTimers = {};
+    let dbStatus = "idle";
+
+    function setDbStatus(status) {
+        dbStatus = status;
+
+        const panel = document.getElementById("dk-workspace-panel");
+        if (!panel) return;
+
+        if (status === "error") {
+            panel.style.background = "#FF1744"; // đỏ rất rõ
+        } else {
+            panel.style.background = "";
+        }
+    }
+
+    window.setDbStatusTest = setDbStatus;
 
     function loadSupabase() {
         return new Promise((resolve, reject) => {
@@ -415,6 +431,7 @@
             );
 
             if (error) {
+                setDbStatus("error");
                 console.error(
                     `[DK Label] Failed to check ${openId}:`,
                     error
@@ -477,6 +494,7 @@
             });
 
             if (insertError) {
+                setDbStatus("error");
                 console.error(
                     `[DK Label] Failed to create ${openId}:`,
                     insertError
@@ -662,6 +680,8 @@
                 .eq("target_open_id", openId);
 
                 if (error) {
+                    setDbStatus("error");
+
                     console.error(
                         `[DK Label] Failed to update ${openId}:`,
                         error
