@@ -2339,20 +2339,30 @@
                    );
     }
 
+
     function getUserFromAvatarClick(event) {
+        // 1. Bấm avatar hoặc badge trong danh sách user
+        const avatar = event.target.closest(
+            ".user-list .avatar, .user-list .leading-badge"
+        );
 
-        const avatar =
-              event.target.closest(".user-list .avatar, .user-list .leading-badge");
+        if (avatar) {
+            const item = avatar.closest(".item");
+            if (!item) return null;
 
-        if (!avatar) return null;
+            const nickEl = item.querySelector(".nick");
+            if (!nickEl) return null;
 
-        const item =
-              avatar.closest(".item");
+            return {
+                fullNick: getFullNickToken(nickEl),
+                color: getNickColor(nickEl)
+            };
+        }
 
-        if (!item) return null;
-
-        const nickEl =
-              item.querySelector(".nick");
+        // 2. Bấm nickname trong khung chat
+        const nickEl = event.target.closest(
+            ".chat-message > span[style*='cursor: pointer']"
+        );
 
         if (!nickEl) return null;
 
@@ -2361,6 +2371,7 @@
             color: getNickColor(nickEl)
         };
     }
+
 
     window.getUserFromAvatarClick = getUserFromAvatarClick;
 
