@@ -3096,11 +3096,46 @@
             return;
         }
 
-        // Có webcam thì có video, không có webcam thì chỉ audio
+
+        let blackCanvas = null;
+        let blackVideoStream = null;
+        let blackAnimationId = null;
+
+        let outputVideoTracks = videoTracks;
+
+        // Không có video thì tạo video nền đen
+        if (videoTracks.length === 0) {
+            blackCanvas = document.createElement("canvas");
+            blackCanvas.width = 320;
+            blackCanvas.height = 240;
+
+            const ctx = blackCanvas.getContext("2d");
+
+            const drawBlackFrame = () => {
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(
+                    0,
+                    0,
+                    blackCanvas.width,
+                    blackCanvas.height
+                );
+
+                blackAnimationId = requestAnimationFrame(drawBlackFrame);
+            };
+
+            drawBlackFrame();
+
+            blackVideoStream = blackCanvas.captureStream(15);
+            outputVideoTracks = blackVideoStream.getVideoTracks();
+
+            console.log("Record: using black video track");
+        }
+
         const stream = new MediaStream([
-            ...videoTracks,
+            ...outputVideoTracks,
             ...audioTracks
         ]);
+
 
         const mimeType = 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"';
 
@@ -3153,6 +3188,20 @@
             recordedChunks = [];
             mediaRecorder = null;
 
+
+            if (blackAnimationId !== null) {
+                cancelAnimationFrame(blackAnimationId);
+                blackAnimationId = null;
+            }
+
+            if (blackVideoStream) {
+                blackVideoStream.getTracks().forEach(track => track.stop());
+                blackVideoStream = null;
+            }
+
+            blackCanvas = null;
+
+
             if (recordButton) {
                 recordButton.innerText = "🔴 Record";
                 recordButton.style.background = "";
@@ -3185,20 +3234,39 @@
         if (document.getElementById("mic-queue-pro-toolbar")) return;
         const target = await waitForElement('div[data-class="DynamicButton"]');
 
-        // RECORD BUTTON
+
+        // RECORD BUTTONS
         const liveListener = document.querySelector('div[data-class="LiveListener"]');
 
-        if (liveListener && !document.getElementById("dk-record-button")) {
+        if (liveListener && !document.getElementById("dk-record-controls")) {
+            const recordControls = document.createElement("div");
+            recordControls.id = "dk-record-controls";
+            recordControls.style.display = "flex";
+            recordControls.style.gap = "0px";
+            recordControls.style.width = "100%";
+            recordControls.style.marginTop = "0px";
+
             recordButton = document.createElement("button");
             recordButton.id = "dk-record-button";
             recordButton.type = "button";
-            recordButton.innerText = "🔴 Record";
+            recordButton.innerText = "🔴 Record 1 file";
             recordButton.className = "btn btn-danger";
-            recordButton.style.display = "block";
-            recordButton.style.width = "100%";
+            recordButton.style.flex = "1";
+            recordButton.style.minWidth = "0";
+            recordButton.style.padding = "3px 0px";
+
+            const recordEachButton = document.createElement("button");
+            recordEachButton.id = "dk-record-each-button";
+            recordEachButton.type = "button";
+            recordEachButton.innerText = "🎙️ Record n file";
+            recordEachButton.className = "btn btn-primary";
+            recordEachButton.style.flex = "1";
+            recordEachButton.style.minWidth = "0";
+            recordEachButton.disabled = true;
+            recordEachButton.title = "Chưa kích hoạt chức năng ghi riêng từng người";
+            recordEachButton.style.padding = "3px 0px";
 
             recordButton.onclick = () => {
-
                 if (!mediaRecorder || mediaRecorder.state === "inactive") {
                     startRecording();
                 } else if (mediaRecorder.state === "recording") {
@@ -3206,12 +3274,15 @@
                 }
             };
 
+            recordControls.append(recordButton, recordEachButton);
+
             const volumecontrols = liveListener.querySelector(".volume-controls");
 
             if (volumecontrols) {
-                volumecontrols.insertAdjacentElement("afterend", recordButton);
+                volumecontrols.insertAdjacentElement("afterend", recordControls);
             }
         }
+
 
 
         const form = await waitForElement("form.chat-input");
