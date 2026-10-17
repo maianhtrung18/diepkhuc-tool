@@ -2406,6 +2406,8 @@
             // Đóng menu
             li.closest(".user-context-menu")?.style.setProperty("display", "none");
 
+            chatTextarea.focus();
+
         };
     }
 
