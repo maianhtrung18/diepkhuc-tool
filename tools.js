@@ -55,6 +55,22 @@
     let recordingNick = "";
     let recordingStartTime = null;
 
+    // Danh sách các phiên ghi A, B, C...
+    let recordingSessions = [];
+
+    // Trạng thái ghi liên tục
+    let isAutoRecording = false;
+
+    // Stream của phiên hiện tại
+    let currentRecordingStream = null;
+
+    // Nickname của phiên hiện tại
+    let currentSessionNick = "";
+
+    // Theo dõi stream để phát hiện đổi người
+    let recordingStreamWatchTimer = null;
+    let lastRecordingSourceStreamId = null;
+
     let selectedMicDeviceId = "";
     let selectedMicName = "";
 
@@ -3068,168 +3084,358 @@
         );
     }
 
-    async function startRecording() {
+    // Các tài nguyên dùng chung cho một phiên ghi liên tục
+    let recordingAudioContext = null;
+    let recordingAudioDestination = null;
+    let recordingAudioSourceNode = null;
+    let recordingCanvas = null;
+    let recordingCanvasStream = null;
+    let recordingCanvasAnimationId = null;
+    let recordingOutputStream = null;
+
+    function switchRecordingAudioSource(video) {
+        if (!video || !video.srcObject || !video.srcObject.active) {
+            return false;
+        }
+
+        if (
+            !video.captureStream ||
+            !recordingAudioContext ||
+            !recordingAudioDestination
+        ) {
+            return false;
+        }
+
+        try {
+            const capturedStream = video.captureStream();
+            const audioTracks = capturedStream.getAudioTracks().filter(
+                track => track.readyState === "live"
+            );
+
+            if (audioTracks.length === 0) return false;
+
+            const audioOnlyStream = new MediaStream(audioTracks);
+            const nextSourceNode =
+                  recordingAudioContext.createMediaStreamSource(audioOnlyStream);
+
+            nextSourceNode.connect(recordingAudioDestination);
+
+            const previousSourceNode = recordingAudioSourceNode;
+            recordingAudioSourceNode = nextSourceNode;
+
+            if (previousSourceNode) {
+                try {
+                    previousSourceNode.disconnect();
+                } catch (_) {}
+            }
+
+            if (recordingAudioContext.state === "suspended") {
+                recordingAudioContext.resume().catch(err => {
+                    console.warn("Không resume được AudioContext:", err);
+                });
+            }
+
+            return true;
+        } catch (err) {
+            console.warn("Chưa chuyển được nguồn audio ghi hình:", err);
+            return false;
+        }
+    }
+
+    function startRecordingStreamWatcher() {
+        stopRecordingStreamWatcher();
+
+        const video = document.querySelector(".live-listener video");
+        lastRecordingSourceStreamId = video?.srcObject?.id ?? null;
+
+        recordingStreamWatchTimer = setInterval(() => {
+            if (!isAutoRecording) return;
+            if (!mediaRecorder || mediaRecorder.state !== "recording") return;
+
+            const currentVideo = document.querySelector(
+                ".live-listener video"
+            );
+
+            const currentStreamId = currentVideo?.srcObject?.id ?? null;
+
+            if (!currentStreamId) return;
+            if (currentStreamId === lastRecordingSourceStreamId) return;
+
+            console.log("🔄 Recording audio source changed:", {
+                from: lastRecordingSourceStreamId,
+                to: currentStreamId
+            });
+
+            // Chỉ cập nhật ID khi đã lấy được nguồn audio mới.
+            if (switchRecordingAudioSource(currentVideo)) {
+                lastRecordingSourceStreamId = currentStreamId;
+                console.log("✅ Đã chuyển nguồn audio, tiếp tục cùng một file.");
+            }
+        }, 500);
+    }
+
+    function stopRecordingStreamWatcher() {
+        if (recordingStreamWatchTimer !== null) {
+            clearInterval(recordingStreamWatchTimer);
+            recordingStreamWatchTimer = null;
+        }
+    }
+
+    function cleanupRecordingResources() {
+        if (recordingCanvasAnimationId !== null) {
+            cancelAnimationFrame(recordingCanvasAnimationId);
+            recordingCanvasAnimationId = null;
+        }
+
+        // Chỉ dừng track do script tạo, không dừng track của trang.
+        if (recordingCanvasStream) {
+            recordingCanvasStream.getTracks().forEach(track => track.stop());
+            recordingCanvasStream = null;
+        }
+
+        if (recordingAudioSourceNode) {
+            try {
+                recordingAudioSourceNode.disconnect();
+            } catch (_) {}
+            recordingAudioSourceNode = null;
+        }
+
+        if (recordingAudioDestination) {
+            recordingAudioDestination.stream
+                .getTracks()
+                .forEach(track => track.stop());
+
+            recordingAudioDestination = null;
+        }
+
+        if (recordingOutputStream) {
+            recordingOutputStream.getTracks().forEach(track => track.stop());
+            recordingOutputStream = null;
+        }
+
+        if (recordingAudioContext) {
+            const context = recordingAudioContext;
+            recordingAudioContext = null;
+            context.close().catch(() => {});
+        }
+
+        recordingCanvas = null;
+    }
+
+    function startRecording(silent = false) {
         const video = document.querySelector(".live-listener video");
 
         if (!video) {
-            alert("Không tìm thấy video LiveListener!");
-            return;
+            if (!silent) alert("Không tìm thấy video LiveListener!");
+            return false;
         }
 
         if (!video.srcObject || !video.srcObject.active) {
-            alert("Chưa có người đang phát!");
-            return;
+            if (!silent) alert("Chưa có người đang phát!");
+            return false;
         }
 
         if (!video.captureStream) {
-            alert("Trình duyệt không hỗ trợ captureStream!");
-            return;
+            if (!silent) alert("Trình duyệt không hỗ trợ captureStream!");
+            return false;
         }
 
-        // Lấy những gì LiveListener đang phát
+        // Kiểm tra audio của người đang hát.
         const capturedStream = video.captureStream();
+        const initialAudioTracks = capturedStream.getAudioTracks().filter(
+            track => track.readyState === "live"
+        );
 
-        const videoTracks = capturedStream.getVideoTracks();
-        const audioTracks = capturedStream.getAudioTracks();
+        console.log("Record AUDIO tracks:", initialAudioTracks);
 
-        console.log("Record VIDEO tracks:", videoTracks);
-        console.log("Record AUDIO tracks:", audioTracks);
-
-        // Audio bắt buộc phải có
-        if (audioTracks.length === 0) {
-            alert("Không lấy được audio!");
-            return;
+        if (initialAudioTracks.length === 0) {
+            if (!silent) alert("Không lấy được audio từ người đang phát!");
+            return false;
         }
-
-
-        let blackCanvas = null;
-        let blackVideoStream = null;
-        let blackAnimationId = null;
-
-        let outputVideoTracks = videoTracks;
-
-        // Không có video thì tạo video nền đen
-        if (videoTracks.length === 0) {
-            blackCanvas = document.createElement("canvas");
-            blackCanvas.width = 320;
-            blackCanvas.height = 240;
-
-            const ctx = blackCanvas.getContext("2d");
-
-            const drawBlackFrame = () => {
-                ctx.fillStyle = "#000000";
-                ctx.fillRect(
-                    0,
-                    0,
-                    blackCanvas.width,
-                    blackCanvas.height
-                );
-
-                blackAnimationId = requestAnimationFrame(drawBlackFrame);
-            };
-
-            drawBlackFrame();
-
-            blackVideoStream = blackCanvas.captureStream(15);
-            outputVideoTracks = blackVideoStream.getVideoTracks();
-
-            console.log("Record: using black video track");
-        }
-
-        const stream = new MediaStream([
-            ...outputVideoTracks,
-            ...audioTracks
-        ]);
-
 
         const mimeType = 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"';
 
         if (!MediaRecorder.isTypeSupported(mimeType)) {
-            alert("Trình duyệt không hỗ trợ MP4!");
-            return;
+            if (!silent) alert("Trình duyệt không hỗ trợ MP4!");
+            return false;
         }
 
-        recordedChunks = [];
+        try {
+            // Tạo một track video ổn định xuyên suốt bản ghi.
+            recordingCanvas = document.createElement("canvas");
+            recordingCanvas.width = 640;
+            recordingCanvas.height = 360;
 
-        mediaRecorder = new MediaRecorder(stream, {
-            mimeType: mimeType
-        });
+            const ctx = recordingCanvas.getContext("2d");
 
-        // Lấy nickname người đang mic
-        recordingNick = getRecordingNick();
+            const drawFrame = () => {
+                if (!recordingCanvas || !ctx) return;
 
-        // Lưu thời điểm bắt đầu record
-        recordingStartTime = new Date();
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(
+                    0,
+                    0,
+                    recordingCanvas.width,
+                    recordingCanvas.height
+                );
 
-        mediaRecorder.ondataavailable = event => {
-            if (event.data && event.data.size > 0) {
-                recordedChunks.push(event.data);
+                try {
+                    if (
+                        video.readyState >= 2 &&
+                        video.videoWidth > 0 &&
+                        video.videoHeight > 0
+                    ) {
+                        const scale = Math.min(
+                            recordingCanvas.width / video.videoWidth,
+                            recordingCanvas.height / video.videoHeight
+                        );
+
+                        const width = video.videoWidth * scale;
+                        const height = video.videoHeight * scale;
+
+                        ctx.drawImage(
+                            video,
+                            (recordingCanvas.width - width) / 2,
+                            (recordingCanvas.height - height) / 2,
+                            width,
+                            height
+                        );
+                    }
+                } catch (_) {}
+
+                recordingCanvasAnimationId =
+                    requestAnimationFrame(drawFrame);
+            };
+
+            drawFrame();
+            recordingCanvasStream = recordingCanvas.captureStream(15);
+
+            // Tạo một đường audio đầu ra ổn định.
+            recordingAudioContext = new AudioContext();
+            recordingAudioDestination =
+                recordingAudioContext.createMediaStreamDestination();
+
+            const initialAudioStream = new MediaStream(initialAudioTracks);
+
+            recordingAudioSourceNode =
+                recordingAudioContext.createMediaStreamSource(
+                initialAudioStream
+            );
+
+            recordingAudioSourceNode.connect(recordingAudioDestination);
+
+            if (recordingAudioContext.state === "suspended") {
+                recordingAudioContext.resume().catch(err => {
+                    console.warn("Không resume được AudioContext:", err);
+                });
             }
-        };
 
-        mediaRecorder.onstop = () => {
-            const blob = new Blob(recordedChunks, {
-                type: "video/mp4"
-            });
-
-            const url = URL.createObjectURL(blob);
-
-            const filename =
-                  `${sanitizeFilename(recordingNick)}_` +
-                  `${formatRecordingDate(recordingStartTime)}.mp4`;
-
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = filename;
-
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-
-            setTimeout(() => {
-                URL.revokeObjectURL(url);
-            }, 1000);
+            // Một MediaStream duy nhất cho cả video và audio.
+            recordingOutputStream = new MediaStream([
+                ...recordingCanvasStream.getVideoTracks(),
+                ...recordingAudioDestination.stream.getAudioTracks()
+            ]);
 
             recordedChunks = [];
-            mediaRecorder = null;
+            mediaRecorder = new MediaRecorder(recordingOutputStream, {
+                mimeType
+            });
 
+            recordingNick = getRecordingNick();
+            recordingStartTime = new Date();
+            lastRecordingSourceStreamId = video.srcObject?.id ?? null;
 
-            if (blackAnimationId !== null) {
-                cancelAnimationFrame(blackAnimationId);
-                blackAnimationId = null;
-            }
+            mediaRecorder.ondataavailable = event => {
+                if (event.data && event.data.size > 0) {
+                    recordedChunks.push(event.data);
+                }
+            };
 
-            if (blackVideoStream) {
-                blackVideoStream.getTracks().forEach(track => track.stop());
-                blackVideoStream = null;
-            }
+            mediaRecorder.onstop = () => {
+                const chunks = recordedChunks;
+                recordedChunks = [];
 
-            blackCanvas = null;
+                const recorderMimeType = mediaRecorder?.mimeType || mimeType;
+                mediaRecorder = null;
 
+                if (chunks.length > 0) {
+                    const blob = new Blob(chunks, {
+                        type: recorderMimeType
+                    });
+
+                    if (blob.size > 0) {
+                        const filename =
+                              `DiepKhuc_Continuous_${formatRecordingDate(recordingStartTime)}.mp4`;
+
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+
+                        a.href = url;
+                        a.download = filename;
+                        a.style.display = "none";
+
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+
+                        setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+                        log(
+                            `Đã xuất file MP4: ${filename} ` +
+                            `(${(blob.size / 1024 / 1024).toFixed(2)} MB)`
+                        );
+                    } else {
+                        console.error("MP4 Blob rỗng, không thể tải xuống.");
+                        log("Lỗi: file ghi rỗng, không có dữ liệu.");
+                    }
+                } else {
+                    console.warn("Không có dữ liệu ghi nào được tạo.");
+                    log("Không có dữ liệu ghi để xuất.");
+                }
+
+                stopRecordingStreamWatcher();
+                cleanupRecordingResources();
+                isAutoRecording = false;
+
+                if (recordButton) {
+                    recordButton.innerText = "🔴 Record 1 file";
+                    recordButton.style.background = "";
+                    recordButton.disabled = false;
+                }
+            };
+
+            mediaRecorder.onerror = event => {
+                console.error("MediaRecorder error:", event);
+                log("Lỗi MediaRecorder; xem Console để biết chi tiết.");
+            };
+
+            mediaRecorder.start();
 
             if (recordButton) {
-                recordButton.innerText = "🔴 Record";
-                recordButton.style.background = "";
+                recordButton.innerText = "⏹ Stop Record";
+                recordButton.style.background = "red";
                 recordButton.disabled = false;
             }
 
-            log(`Recording saved: ${filename}`);
-        };
+            log(
+                `Bắt đầu ghi một file liên tục ` +
+                `(audio tracks: ${initialAudioTracks.length}).`
+            );
 
-        mediaRecorder.onerror = event => {
-            console.error("MediaRecorder error:", event);
-        };
+            return true;
+        } catch (err) {
+            console.error("Không thể bắt đầu ghi MP4:", err);
+            cleanupRecordingResources();
+            mediaRecorder = null;
 
-        mediaRecorder.start();
+            if (!silent) {
+                alert(`Không thể bắt đầu ghi MP4: ${err.message || err}`);
+            }
 
-        recordButton.innerText = "⏹ Stop Record";
-        recordButton.style.background = "red";
-
-        log(
-            `Recording started: ${recordingNick} ` +
-            `(video tracks: ${videoTracks.length}, audio tracks: ${audioTracks.length})`
-        );
+            return false;
+        }
     }
+
 
     //////////////////////////////////////////////////////
     // UI
@@ -3271,13 +3477,44 @@
             recordEachButton.title = "Chưa kích hoạt chức năng ghi riêng từng người";
             recordEachButton.style.padding = "3px 0px";
 
+
+
             recordButton.onclick = () => {
-                if (!mediaRecorder || mediaRecorder.state === "inactive") {
-                    startRecording();
-                } else if (mediaRecorder.state === "recording") {
-                    mediaRecorder.stop();
+                // Đang ghi liên tục hoặc đang chờ nguồn quay lại:
+                // bấm nút là dừng toàn bộ chuỗi ghi.
+                if (isAutoRecording) {
+                    isAutoRecording = false;
+                    stopRecordingStreamWatcher();
+
+                    if (mediaRecorder && mediaRecorder.state === "recording") {
+                        mediaRecorder.stop();
+                    } else {
+                        // Đang chờ thử ghi lại, không có recorder hoạt động
+                        recordButton.innerText = "🔴 Record 1 file";
+                        recordButton.style.background = "";
+                        recordButton.disabled = false;
+
+                        log("Đã hủy chờ ghi tiếp.");
+                    }
+
+                    return;
+                }
+
+                // Bắt đầu một chuỗi ghi mới
+                recordingSessions = [];
+                isAutoRecording = true;
+
+                const started = startRecording();
+
+                if (started && mediaRecorder?.state === "recording") {
+                    startRecordingStreamWatcher();
+                } else {
+                    isAutoRecording = false;
+                    stopRecordingStreamWatcher();
                 }
             };
+
+
 
             recordControls.append(recordButton, recordEachButton);
 
