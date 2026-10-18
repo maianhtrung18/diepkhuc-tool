@@ -2334,8 +2334,7 @@
             };
         })
             .filter(user =>
-                    user.fullNick &&
-                    user.fullNick !== myNick
+                    user.fullNick
                    );
     }
 
@@ -2505,8 +2504,14 @@
 
     async function checkNewMicUser() {
 
-        const micUsers =
-              getMicUsers();
+        const myNickEl = document.querySelector(".my-nick");
+        const myNick = myNickEl
+        ? getFullNickToken(myNickEl)
+        : "";
+
+        const micUsers = getMicUsers().filter(
+            user => user.fullNick !== myNick
+        );
 
 
         // ========================================
