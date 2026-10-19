@@ -120,7 +120,7 @@
 
         /* Thu toolbox vào cạnh phải */
         #my-dkhd-toolbox.collapsed {
-            transform: translateX(calc(-100% + 36px));
+            transform: translateX(calc(-100% + 16px));
         }
 
         /* Phần thân toolbox */
