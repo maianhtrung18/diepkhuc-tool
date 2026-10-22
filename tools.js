@@ -3296,6 +3296,12 @@
             return;
         }
 
+        console.log("[Record N] Bấm dừng:", {
+            time: new Date().toISOString(),
+            state: recorder.state,
+            chunks: recordNSession.recordedChunks.length
+        });
+
         recorder.stop();
     }
 
@@ -3410,6 +3416,10 @@
             };
 
             recorder.onstop = () => {
+                console.log("[Record N] onstop:", {
+                    time: new Date().toISOString(),
+                    chunks: session.recordedChunks.length
+                });
                 const chunks = session.recordedChunks;
                 session.recordedChunks = [];
 
