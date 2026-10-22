@@ -71,6 +71,36 @@
     let recordingStreamWatchTimer = null;
     let lastRecordingSourceStreamId = null;
 
+    // ==========================================
+    // RECORD N FILE — TRẠNG THÁI ĐỘC LẬP
+    // Không dùng chung MediaRecorder và tài nguyên
+    // với Record 1 file.
+    // ==========================================
+
+    const recordNSession = {
+        isRecording: false,
+
+        mediaRecorder: null,
+        recordedChunks: [],
+
+        recordingNick: "",
+        recordingStartTime: null,
+
+        watchTimer: null,
+        lastSourceStreamId: null,
+        switching: false,
+
+        audioContext: null,
+        audioDestination: null,
+        audioSourceNode: null,
+
+        canvas: null,
+        canvasStream: null,
+        canvasAnimationId: null,
+
+        outputStream: null
+    };
+
     let selectedMicDeviceId = "";
     let selectedMicName = "";
 
@@ -3181,6 +3211,328 @@
         }
     }
 
+
+
+    function cleanupRecordNSegmentResources() {
+        const session = recordNSession;
+
+        if (session.canvasAnimationId !== null) {
+            cancelAnimationFrame(session.canvasAnimationId);
+            session.canvasAnimationId = null;
+        }
+
+        if (session.canvasStream) {
+            session.canvasStream.getTracks().forEach(track => track.stop());
+            session.canvasStream = null;
+        }
+
+        if (session.audioSourceNode) {
+            try {
+                session.audioSourceNode.disconnect();
+            } catch (_) {}
+            session.audioSourceNode = null;
+        }
+
+        if (session.audioDestination) {
+            session.audioDestination.stream
+                .getTracks()
+                .forEach(track => track.stop());
+            session.audioDestination = null;
+        }
+
+        if (session.outputStream) {
+            session.outputStream.getTracks().forEach(track => track.stop());
+            session.outputStream = null;
+        }
+
+        if (session.audioContext) {
+            const context = session.audioContext;
+            session.audioContext = null;
+            context.close().catch(() => {});
+        }
+
+        session.canvas = null;
+    }
+
+    function saveRecordNSegment() {
+        const session = recordNSession;
+        const recorder = session.mediaRecorder;
+
+        if (!recorder || recorder.state === "inactive") {
+            return;
+        }
+
+        recorder.stop();
+    }
+
+    function startRecordNSegment(video, silent = true) {
+        const session = recordNSession;
+
+        if (
+            !session.isRecording ||
+            !video ||
+            !video.srcObject ||
+            !video.srcObject.active ||
+            !video.captureStream
+        ) {
+            return false;
+        }
+
+        const mimeType = 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"';
+
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+            if (!silent) alert("Trình duyệt không hỗ trợ MP4!");
+            return false;
+        }
+
+        let recorder = null;
+
+        try {
+            const capturedStream = video.captureStream();
+            const audioTracks = capturedStream.getAudioTracks().filter(
+                track => track.readyState === "live"
+            );
+
+            if (audioTracks.length === 0) {
+                if (!silent) alert("Không lấy được audio từ người đang phát!");
+                return false;
+            }
+
+            session.canvas = document.createElement("canvas");
+            session.canvas.width = 640;
+            session.canvas.height = 360;
+
+            const canvas = session.canvas;
+            const ctx = canvas.getContext("2d");
+
+            const drawFrame = () => {
+                if (session.canvas !== canvas || !ctx) return;
+
+                ctx.fillStyle = "#000";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                try {
+                    if (
+                        video.readyState >= 2 &&
+                        video.videoWidth > 0 &&
+                        video.videoHeight > 0
+                    ) {
+                        const scale = Math.min(
+                            canvas.width / video.videoWidth,
+                            canvas.height / video.videoHeight
+                        );
+
+                        const width = video.videoWidth * scale;
+                        const height = video.videoHeight * scale;
+
+                        ctx.drawImage(
+                            video,
+                            (canvas.width - width) / 2,
+                            (canvas.height - height) / 2,
+                            width,
+                            height
+                        );
+                    }
+                } catch (_) {}
+
+                session.canvasAnimationId =
+                    requestAnimationFrame(drawFrame);
+            };
+
+            drawFrame();
+            session.canvasStream = canvas.captureStream(15);
+
+            session.audioContext = new AudioContext();
+            session.audioDestination =
+                session.audioContext.createMediaStreamDestination();
+
+            session.audioSourceNode =
+                session.audioContext.createMediaStreamSource(
+                new MediaStream(audioTracks)
+            );
+
+            session.audioSourceNode.connect(session.audioDestination);
+
+            if (session.audioContext.state === "suspended") {
+                session.audioContext.resume().catch(console.warn);
+            }
+
+            session.outputStream = new MediaStream([
+                ...session.canvasStream.getVideoTracks(),
+                ...session.audioDestination.stream.getAudioTracks()
+            ]);
+
+            session.recordedChunks = [];
+            session.recordingNick = getRecordingNick();
+            session.recordingStartTime = new Date();
+
+            recorder = new MediaRecorder(session.outputStream, { mimeType });
+            session.mediaRecorder = recorder;
+
+            recorder.ondataavailable = event => {
+                if (event.data && event.data.size > 0) {
+                    session.recordedChunks.push(event.data);
+                }
+            };
+
+            recorder.onstop = () => {
+                const chunks = session.recordedChunks;
+                session.recordedChunks = [];
+
+                if (session.mediaRecorder === recorder) {
+                    session.mediaRecorder = null;
+                }
+
+                if (chunks.length > 0) {
+                    const blob = new Blob(chunks, {
+                        type: recorder.mimeType || mimeType
+                    });
+
+                    if (blob.size > 0) {
+                        const filename =
+                              `DiepKhuc_${sanitizeFilename(session.recordingNick)}_` +
+                              `${formatRecordingDate(session.recordingStartTime)}.mp4`;
+
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement("a");
+
+                        link.href = url;
+                        link.download = filename;
+                        link.style.display = "none";
+
+                        document.body.appendChild(link);
+                        link.click();
+                        link.remove();
+
+                        setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+                        log(
+                            `Đã xuất ${filename} ` +
+                            `(${(blob.size / 1024 / 1024).toFixed(2)} MB)`
+                        );
+                    }
+                }
+
+                cleanupRecordNSegmentResources();
+            };
+
+            recorder.onerror = event => {
+                console.error("Record N MediaRecorder error:", event);
+            };
+
+            session.lastSourceStreamId = video.srcObject.id ?? null;
+            recorder.start();
+
+            log(`Bắt đầu ghi riêng: ${session.recordingNick}`);
+            return true;
+        } catch (err) {
+            console.error("Không thể bắt đầu Record N:", err);
+            cleanupRecordNSegmentResources();
+
+            if (session.mediaRecorder === recorder) {
+                session.mediaRecorder = null;
+            }
+
+            if (!silent) {
+                alert(`Không thể bắt đầu ghi MP4: ${err.message || err}`);
+            }
+
+            return false;
+        }
+    }
+
+
+    function startRecordNWatcher() {
+        const session = recordNSession;
+
+        if (session.watchTimer !== null) {
+            clearInterval(session.watchTimer);
+        }
+
+        session.watchTimer = setInterval(() => {
+            if (!session.isRecording || session.switching) return;
+
+            // 1. Kiểm tra người đang giữ mic
+            const micUsers = getMicUsers();
+            const micNick = micUsers[0]?.fullNick || "";
+
+            // 2. Kiểm tra stream hiện tại
+            const video = document.querySelector(".live-listener video");
+            const stream = video?.srcObject;
+            const streamActive = !!stream?.active;
+            const streamId = stream?.id ?? null;
+
+            const recorder = session.mediaRecorder;
+
+            // 3. Nếu đang ghi, kiểm tra điều kiện kết thúc file
+            if (recorder) {
+                if (recorder.state !== "recording") return;
+
+                const noMic = !micNick;
+                const nickChanged =
+                      !!micNick && micNick !== session.recordingNick;
+                const streamChanged =
+                      streamActive &&
+                      streamId !== session.lastSourceStreamId;
+                const streamStopped = !streamActive;
+
+                if (
+                    noMic ||
+                    nickChanged ||
+                    streamChanged ||
+                    streamStopped
+                ) {
+                    session.switching = true;
+
+                    if (noMic) {
+                        log("Không còn ai giữ mic, đang lưu file...");
+                    } else if (nickChanged) {
+                        log("Phát hiện người hát mới, đang lưu file...");
+                    } else {
+                        log("Stream thay đổi hoặc ngắt, đang lưu file...");
+                    }
+
+                    saveRecordNSegment();
+
+                    // Chờ lưu file và dọn tài nguyên xong
+                    const waitForStop = () => {
+                        if (session.mediaRecorder) {
+                            setTimeout(waitForStop, 100);
+                            return;
+                        }
+
+                        session.switching = false;
+                    };
+
+                    setTimeout(waitForStop, 100);
+                }
+
+                return;
+            }
+
+            // 4. Chưa có recorder: chỉ bắt đầu khi có mic và stream hoạt động
+            if (!micNick || !streamActive || !video?.captureStream) {
+                return;
+            }
+
+            if (startRecordNSegment(video, true)) {
+                session.lastSourceStreamId = streamId;
+            }
+        }, 500);
+    }
+
+
+    function stopRecordNWatcher() {
+        const session = recordNSession;
+
+        if (session.watchTimer !== null) {
+            clearInterval(session.watchTimer);
+            session.watchTimer = null;
+        }
+    }
+
+
+
     function cleanupRecordingResources() {
         if (recordingCanvasAnimationId !== null) {
             cancelAnimationFrame(recordingCanvasAnimationId);
@@ -3412,7 +3764,7 @@
             mediaRecorder.start();
 
             if (recordButton) {
-                recordButton.innerText = "⏹ Stop Record";
+                recordButton.innerText = "⏹ Stop 1";
                 recordButton.style.background = "red";
                 recordButton.disabled = false;
             }
@@ -3473,9 +3825,51 @@
             recordEachButton.className = "btn btn-primary";
             recordEachButton.style.flex = "1";
             recordEachButton.style.minWidth = "0";
-            recordEachButton.disabled = true;
-            recordEachButton.title = "Chưa kích hoạt chức năng ghi riêng từng người";
+            recordEachButton.disabled = false;
+            recordEachButton.title = "Ghi riêng từng file khi đổi người phát";
             recordEachButton.style.padding = "3px 0px";
+
+
+
+
+            recordEachButton.onclick = () => {
+                const session = recordNSession;
+
+                // ĐANG CHẠY → DỪNG
+                if (session.isRecording) {
+                    session.isRecording = false;
+                    stopRecordNWatcher();
+
+                    if (
+                        session.mediaRecorder &&
+                        session.mediaRecorder.state === "recording"
+                    ) {
+                        saveRecordNSegment();
+                    } else {
+                        session.switching = false;
+                    }
+
+                    recordEachButton.innerText = "🎙️ Record n file";
+                    recordEachButton.style.background = "";
+                    recordEachButton.disabled = false;
+
+                    log("Đã dừng Record N.");
+                    return;
+                }
+
+                // BẬT CHẾ ĐỘ GHI, KỂ CẢ KHI CHƯA CÓ AI BẬT MIC
+                session.switching = false;
+                session.isRecording = true;
+                session.lastSourceStreamId = null;
+
+                recordEachButton.innerText = "⏹ Stop N";
+                recordEachButton.style.background = "red";
+
+                startRecordNWatcher();
+
+                log("Record N đang chạy, chờ người bật mic...");
+            };
+
 
 
 
