@@ -3118,6 +3118,8 @@
     let recordingAudioContext = null;
     let recordingAudioDestination = null;
     let recordingAudioSourceNode = null;
+    let recordingAudioTracks = [];
+
     let recordingCanvas = null;
     let recordingCanvasStream = null;
     let recordingCanvasAnimationId = null;
@@ -3152,6 +3154,7 @@
 
             const previousSourceNode = recordingAudioSourceNode;
             recordingAudioSourceNode = nextSourceNode;
+            recordingAudioTracks = audioTracks;
 
             if (previousSourceNode) {
                 try {
@@ -3210,7 +3213,17 @@
             }
 
             // Có mic trở lại: kiểm tra nguồn audio trước
-            if (streamId && streamId !== lastRecordingSourceStreamId) {
+            const audioTracksEnded =
+                  recordingAudioTracks.length === 0 ||
+                  recordingAudioTracks.every(
+                      track => track.readyState !== "live"
+                  );
+
+            if (
+                !recordingAudioSourceNode ||
+                audioTracksEnded ||
+                (streamId && streamId !== lastRecordingSourceStreamId)
+            ) {
                 console.log("🔄 Record 1 file: phát hiện stream mới", {
                     from: lastRecordingSourceStreamId,
                     to: streamId
@@ -3626,28 +3639,29 @@
             return false;
         }
 
-        if (!video.srcObject || !video.srcObject.active) {
-            if (!silent) alert("Chưa có người đang phát!");
-            return false;
-        }
 
         if (!video.captureStream) {
             if (!silent) alert("Trình duyệt không hỗ trợ captureStream!");
             return false;
         }
 
-        // Kiểm tra audio của người đang hát.
-        const capturedStream = video.captureStream();
-        const initialAudioTracks = capturedStream.getAudioTracks().filter(
-            track => track.readyState === "live"
-        );
+        // Audio có thể chưa xuất hiện khi bấm Record 1.
+        // Nếu chưa có thì khởi tạo phiên ghi và chờ watcher kết nối sau.
+        let initialAudioTracks = [];
 
-        console.log("Record AUDIO tracks:", initialAudioTracks);
+        if (video.srcObject?.active) {
+            try {
+                const capturedStream = video.captureStream();
 
-        if (initialAudioTracks.length === 0) {
-            if (!silent) alert("Không lấy được audio từ người đang phát!");
-            return false;
+                initialAudioTracks = capturedStream
+                    .getAudioTracks()
+                    .filter(track => track.readyState === "live");
+            } catch (err) {
+                console.warn("Chưa lấy được audio ban đầu, sẽ chờ mic:", err);
+            }
         }
+
+        console.log("Record AUDIO tracks ban đầu:", initialAudioTracks);
 
         const mimeType = 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"';
 
@@ -3711,14 +3725,18 @@
             recordingAudioDestination =
                 recordingAudioContext.createMediaStreamDestination();
 
-            const initialAudioStream = new MediaStream(initialAudioTracks);
+            // Tạo đầu ra audio ổn định ngay cả khi chưa có mic.
+            recordingAudioSourceNode = null;
 
-            recordingAudioSourceNode =
-                recordingAudioContext.createMediaStreamSource(
-                initialAudioStream
-            );
+            if (initialAudioTracks.length > 0) {
+                const initialAudioStream = new MediaStream(initialAudioTracks);
 
-            recordingAudioSourceNode.connect(recordingAudioDestination);
+                recordingAudioSourceNode =
+                    recordingAudioContext.createMediaStreamSource(initialAudioStream);
+
+                recordingAudioSourceNode.connect(recordingAudioDestination);
+                recordingAudioTracks = initialAudioTracks;
+            }
 
             if (recordingAudioContext.state === "suspended") {
                 recordingAudioContext.resume().catch(err => {
