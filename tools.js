@@ -3172,37 +3172,71 @@
         }
     }
 
+
     function startRecordingStreamWatcher() {
         stopRecordingStreamWatcher();
 
         const video = document.querySelector(".live-listener video");
         lastRecordingSourceStreamId = video?.srcObject?.id ?? null;
 
+        let isPausedForNoMic = false;
+
         recordingStreamWatchTimer = setInterval(() => {
-            if (!isAutoRecording) return;
-            if (!mediaRecorder || mediaRecorder.state !== "recording") return;
+            if (!isAutoRecording || !mediaRecorder) return;
 
             const currentVideo = document.querySelector(
                 ".live-listener video"
             );
 
-            const currentStreamId = currentVideo?.srcObject?.id ?? null;
+            const stream = currentVideo?.srcObject;
+            const streamActive = !!stream?.active;
+            const streamId = stream?.id ?? null;
 
-            if (!currentStreamId) return;
-            if (currentStreamId === lastRecordingSourceStreamId) return;
+            // Kiểm tra người đang giữ mic
+            const micUsers = getMicUsers();
+            const hasMic = micUsers.length > 0;
 
-            console.log("🔄 Recording audio source changed:", {
-                from: lastRecordingSourceStreamId,
-                to: currentStreamId
-            });
+            // Chỉ ghi khi có người giữ mic và stream hoạt động
+            const shouldRecord = hasMic && streamActive;
 
-            // Chỉ cập nhật ID khi đã lấy được nguồn audio mới.
-            if (switchRecordingAudioSource(currentVideo)) {
-                lastRecordingSourceStreamId = currentStreamId;
-                console.log("✅ Đã chuyển nguồn audio, tiếp tục cùng một file.");
+            // Không có mic hoặc stream đã ngắt: tạm dừng ghi
+            if (!shouldRecord) {
+                if (mediaRecorder.state === "recording") {
+                    mediaRecorder.pause();
+                    isPausedForNoMic = true;
+                    log("Không có mic hoặc stream ngắt, tạm dừng Record 1 file.");
+                }
+                return;
+            }
+
+            // Có mic trở lại: kiểm tra nguồn audio trước
+            if (streamId && streamId !== lastRecordingSourceStreamId) {
+                console.log("🔄 Record 1 file: phát hiện stream mới", {
+                    from: lastRecordingSourceStreamId,
+                    to: streamId
+                });
+
+                if (switchRecordingAudioSource(currentVideo)) {
+                    lastRecordingSourceStreamId = streamId;
+                    console.log("✅ Đã chuyển nguồn audio.");
+                } else {
+                    // Chưa chuyển được nguồn thì chưa resume để tránh ghi sai nguồn
+                    return;
+                }
+            }
+
+            // Tiếp tục cùng file MP4, không tạo file mới
+            if (
+                isPausedForNoMic &&
+                mediaRecorder.state === "paused"
+            ) {
+                mediaRecorder.resume();
+                isPausedForNoMic = false;
+                log("Mic hoạt động trở lại, tiếp tục Record 1 file.");
             }
         }, 500);
     }
+
 
     function stopRecordingStreamWatcher() {
         if (recordingStreamWatchTimer !== null) {
@@ -3880,9 +3914,17 @@
                     isAutoRecording = false;
                     stopRecordingStreamWatcher();
 
-                    if (mediaRecorder && mediaRecorder.state === "recording") {
+
+                    if (
+                        mediaRecorder &&
+                        (
+                            mediaRecorder.state === "recording" ||
+                            mediaRecorder.state === "paused"
+                        )
+                    ) {
                         mediaRecorder.stop();
                     } else {
+
                         // Đang chờ thử ghi lại, không có recorder hoạt động
                         recordButton.innerText = "🔴 Record 1 file";
                         recordButton.style.background = "";
