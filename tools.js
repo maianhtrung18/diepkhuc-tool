@@ -3608,6 +3608,7 @@
             } catch (_) {}
             recordingAudioSourceNode = null;
         }
+        recordingAudioTracks = [];
 
         if (recordingAudioDestination) {
             recordingAudioDestination.stream
